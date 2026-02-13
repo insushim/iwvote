@@ -1,7 +1,7 @@
 'use client';
 
-import { useState, useCallback } from 'react';
-import { useParams, useRouter } from 'next/navigation';
+import { Suspense, useState, useCallback } from 'react';
+import { useSearchParams, useRouter } from 'next/navigation';
 import { motion, AnimatePresence } from 'framer-motion';
 import toast from 'react-hot-toast';
 import {
@@ -34,10 +34,24 @@ import { cn } from '@/lib/utils';
 import { ELECTION_STATUS_LABELS } from '@/constants';
 import type { Candidate } from '@/types';
 
-export default function CandidatesPage() {
-  const params = useParams();
+// ===== Helpers =====
+
+function createEmptyCandidate(number: number): CandidateFormData {
+  return {
+    number,
+    name: '',
+    grade: 0,
+    classNum: 0,
+    photoURL: '',
+    slogan: '',
+    pledges: [''],
+  };
+}
+
+function CandidatesPageContent() {
+  const searchParams = useSearchParams();
   const router = useRouter();
-  const electionId = params.id as string;
+  const electionId = searchParams.get('id') ?? '';
   const { election, loading, error } = useElection(electionId);
 
   const [showAddForm, setShowAddForm] = useState(false);
@@ -176,7 +190,7 @@ export default function CandidatesPage() {
     <div className="mx-auto max-w-4xl px-4 py-8">
       {/* Header */}
       <button
-        onClick={() => router.push(`/admin/elections/${electionId}`)}
+        onClick={() => router.push(`/admin/elections/detail?id=${electionId}`)}
         className="mb-4 inline-flex items-center gap-1 text-sm text-gray-500 transition-colors hover:text-gray-700"
       >
         <ChevronLeft className="h-4 w-4" />
@@ -497,16 +511,10 @@ export default function CandidatesPage() {
   );
 }
 
-// ===== Helpers =====
-
-function createEmptyCandidate(number: number): CandidateFormData {
-  return {
-    number,
-    name: '',
-    grade: 0,
-    classNum: 0,
-    photoURL: '',
-    slogan: '',
-    pledges: [''],
-  };
+export default function Page() {
+  return (
+    <Suspense fallback={<div className="flex min-h-[60vh] items-center justify-center"><Spinner size="lg" label="로딩 중..." /></div>}>
+      <CandidatesPageContent />
+    </Suspense>
+  );
 }

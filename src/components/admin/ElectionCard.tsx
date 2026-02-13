@@ -126,7 +126,7 @@ export function ElectionCard({ election, index = 0 }: ElectionCardProps) {
 
       {/* Action button */}
       <div className="mt-4 flex justify-end">
-        <Link href={`/admin/elections/${election.id}`}>
+        <Link href={`/admin/elections/detail?id=${election.id}`}>
           <Button
             variant="outline"
             size="sm"

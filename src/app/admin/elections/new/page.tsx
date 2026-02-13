@@ -358,7 +358,7 @@ export default function NewElectionPage() {
       });
 
       toast.success('선거가 성공적으로 생성되었습니다!');
-      router.push(`/admin/elections/${electionId}`);
+      router.push(`/admin/elections/detail?id=${electionId}`);
     } catch (err) {
       const message =
         err instanceof Error ? err.message : '선거 생성에 실패했습니다.';

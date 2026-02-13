@@ -73,6 +73,7 @@ export interface Vote {
 // ===== Voter Code =====
 export interface VoterCode {
   id: string;
+  electionId: string;
   code: string;
   codeHash: string;
   classId: string;

@@ -1,7 +1,7 @@
 'use client';
 
-import { useState, useCallback, useMemo } from 'react';
-import { useParams, useRouter } from 'next/navigation';
+import { Suspense, useState, useCallback, useMemo } from 'react';
+import { useSearchParams, useRouter } from 'next/navigation';
 import { motion } from 'framer-motion';
 import Link from 'next/link';
 import toast from 'react-hot-toast';
@@ -128,7 +128,7 @@ const NAV_TABS = [
   { href: 'candidates', label: '후보자', icon: Users },
   { href: 'voters', label: '유권자', icon: UserCheck },
   { href: 'codes', label: '투표코드', icon: KeyRound },
-  { href: 'realtime', label: '실시간현황', icon: BarChart3 },
+  { href: 'monitor', label: '실시간현황', icon: BarChart3 },
   { href: 'results', label: '개표결과', icon: Vote },
   { href: 'audit', label: '해시감사', icon: Hash },
 ] as const;
@@ -149,12 +149,12 @@ function getStatusBadgeVariant(
   return map[status] || 'default';
 }
 
-// ===== Page Component =====
+// ===== Page Content Component =====
 
-export default function ElectionDetailPage() {
-  const params = useParams();
+function ElectionDetailPageContent() {
+  const searchParams = useSearchParams();
   const router = useRouter();
-  const electionId = params.id as string;
+  const electionId = searchParams.get('id') ?? '';
   const { election, loading, error } = useElection(electionId);
 
   const [confirmAction, setConfirmAction] = useState<StatusAction | null>(null);
@@ -371,7 +371,7 @@ export default function ElectionDetailPage() {
             return (
               <Link
                 key={tab.href}
-                href={`/admin/elections/${electionId}/${tab.href}`}
+                href={`/admin/elections/detail/${tab.href}?id=${electionId}`}
                 className={cn(
                   'flex shrink-0 items-center gap-2 border-b-2 px-5 py-3.5 text-sm font-medium transition-colors',
                   'border-transparent text-gray-500 hover:border-gray-300 hover:text-gray-700'
@@ -478,7 +478,7 @@ export default function ElectionDetailPage() {
                 등록된 후보자
               </h3>
               <Link
-                href={`/admin/elections/${electionId}/candidates`}
+                href={`/admin/elections/detail/candidates?id=${electionId}`}
                 className="text-sm text-blue-600 hover:text-blue-700"
               >
                 전체보기
@@ -559,5 +559,13 @@ export default function ElectionDetailPage() {
         </div>
       </Modal>
     </div>
+  );
+}
+
+export default function Page() {
+  return (
+    <Suspense fallback={<div className="flex min-h-[60vh] items-center justify-center"><Spinner size="lg" label="로딩 중..." /></div>}>
+      <ElectionDetailPageContent />
+    </Suspense>
   );
 }

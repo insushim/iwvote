@@ -1,7 +1,7 @@
 'use client';
 
-import { useState, useEffect, useCallback, useMemo } from 'react';
-import { useParams, useRouter } from 'next/navigation';
+import { Suspense, useState, useEffect, useCallback, useMemo } from 'react';
+import { useSearchParams, useRouter } from 'next/navigation';
 import Link from 'next/link';
 import { motion } from 'framer-motion';
 import toast from 'react-hot-toast';
@@ -45,10 +45,10 @@ interface ClassInfo {
   codesTotal: number;
 }
 
-export default function VotersPage() {
-  const params = useParams();
+function VotersPageContent() {
+  const searchParams = useSearchParams();
   const router = useRouter();
-  const electionId = params.id as string;
+  const electionId = searchParams.get('id') ?? '';
   const { election, loading: electionLoading, error: electionError } = useElection(electionId);
   const { user } = useAuth();
 
@@ -255,7 +255,7 @@ export default function VotersPage() {
     <div className="mx-auto max-w-5xl px-4 py-8">
       {/* Header */}
       <button
-        onClick={() => router.push(`/admin/elections/${electionId}`)}
+        onClick={() => router.push(`/admin/elections/detail?id=${electionId}`)}
         className="mb-4 inline-flex items-center gap-1 text-sm text-gray-500 transition-colors hover:text-gray-700"
       >
         <ChevronLeft className="h-4 w-4" />
@@ -424,7 +424,7 @@ export default function VotersPage() {
                       </Button>
                     ) : (
                       <Link
-                        href={`/admin/elections/${electionId}/codes?class=${classInfo.classId}`}
+                        href={`/admin/elections/detail/codes?id=${electionId}&class=${classInfo.classId}`}
                       >
                         <Button variant="outline" size="sm" iconLeft={<KeyRound className="h-3.5 w-3.5" />}>
                           코드 생성
@@ -450,7 +450,7 @@ export default function VotersPage() {
 
       {/* Code generation link */}
       <div className="mt-6 flex justify-center">
-        <Link href={`/admin/elections/${electionId}/codes`}>
+        <Link href={`/admin/elections/detail/codes?id=${electionId}`}>
           <Button
             variant="outline"
             size="lg"
@@ -502,5 +502,13 @@ export default function VotersPage() {
         </motion.div>
       )}
     </div>
+  );
+}
+
+export default function Page() {
+  return (
+    <Suspense fallback={<div className="flex min-h-[60vh] items-center justify-center"><Spinner size="lg" label="로딩 중..." /></div>}>
+      <VotersPageContent />
+    </Suspense>
   );
 }

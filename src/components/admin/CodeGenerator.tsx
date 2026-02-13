@@ -8,6 +8,8 @@ import { Button } from '@/components/ui/Button';
 import { Card } from '@/components/ui/Card';
 import { Badge } from '@/components/ui/Badge';
 import { classIdToLabel } from '@/lib/utils';
+import { generateVoteCode, hashVoteCode } from '@/lib/voteCode';
+import { createVoterCodes } from '@/lib/firestore';
 
 interface ClassConfig {
   classId: string;
@@ -48,26 +50,38 @@ export function CodeGenerator({ electionId, classes, onCodesGenerated }: CodeGen
     }));
 
     try {
-      const response = await fetch('/api/codes', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ electionId, classId, count }),
-      });
+      // Parse grade and classNum from classId (format: "grade-classNum")
+      const parts = classId.split('-');
+      const grade = parseInt(parts[0], 10);
+      const classNum = parseInt(parts[1], 10);
 
-      if (!response.ok) {
-        const errorData = await response.json().catch(() => ({}));
-        throw new Error(errorData.error || '코드 생성에 실패했습니다.');
+      // Generate codes client-side
+      const codesToCreate = [];
+      for (let i = 0; i < count; i++) {
+        const plainCode = generateVoteCode();
+        const codeHash = hashVoteCode(plainCode);
+        codesToCreate.push({
+          code: plainCode,
+          codeHash,
+          electionId,
+          classId,
+          grade,
+          classNum,
+          studentNumber: i + 1,
+          used: false,
+          usedAt: null,
+        });
       }
 
-      const data = await response.json();
-      const generatedCount = data.codes?.length ?? count;
+      // Save to Firestore directly
+      await createVoterCodes(codesToCreate);
 
       setStatuses((prev) => ({
         ...prev,
-        [classId]: { ...prev[classId], status: 'done', generated: generatedCount },
+        [classId]: { ...prev[classId], status: 'done', generated: codesToCreate.length },
       }));
 
-      toast.success(`${classIdToLabel(classId)} 코드 ${generatedCount}개 생성 완료`);
+      toast.success(`${classIdToLabel(classId)} 코드 ${codesToCreate.length}개 생성 완료`);
     } catch (err) {
       const message = err instanceof Error ? err.message : '알 수 없는 오류';
       setStatuses((prev) => ({

@@ -10,18 +10,36 @@
       ]
     },
     {
+      "collectionGroup": "votes",
+      "queryScope": "COLLECTION",
+      "fields": [
+        { "fieldPath": "electionId", "order": "ASCENDING" },
+        { "fieldPath": "timestamp", "order": "ASCENDING" }
+      ]
+    },
+    {
       "collectionGroup": "voterCodes",
       "queryScope": "COLLECTION",
       "fields": [
-        { "fieldPath": "codeHash", "order": "ASCENDING" },
-        { "fieldPath": "used", "order": "ASCENDING" }
+        { "fieldPath": "electionId", "order": "ASCENDING" },
+        { "fieldPath": "classId", "order": "ASCENDING" },
+        { "fieldPath": "studentNumber", "order": "ASCENDING" }
       ]
     },
     {
       "collectionGroup": "hashChain",
       "queryScope": "COLLECTION",
       "fields": [
+        { "fieldPath": "electionId", "order": "ASCENDING" },
         { "fieldPath": "index", "order": "ASCENDING" }
+      ]
+    },
+    {
+      "collectionGroup": "hashChain",
+      "queryScope": "COLLECTION",
+      "fields": [
+        { "fieldPath": "electionId", "order": "ASCENDING" },
+        { "fieldPath": "index", "order": "DESCENDING" }
       ]
     },
     {
@@ -29,8 +47,15 @@
       "queryScope": "COLLECTION",
       "fields": [
         { "fieldPath": "schoolId", "order": "ASCENDING" },
-        { "fieldPath": "status", "order": "ASCENDING" },
         { "fieldPath": "createdAt", "order": "DESCENDING" }
+      ]
+    },
+    {
+      "collectionGroup": "auditLogs",
+      "queryScope": "COLLECTION",
+      "fields": [
+        { "fieldPath": "electionId", "order": "ASCENDING" },
+        { "fieldPath": "timestamp", "order": "DESCENDING" }
       ]
     }
   ]

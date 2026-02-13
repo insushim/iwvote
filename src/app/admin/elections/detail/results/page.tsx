@@ -1,6 +1,7 @@
 'use client';
 
-import { useState, useEffect, useCallback, useMemo, use } from 'react';
+import { Suspense, useState, useEffect, useCallback, useMemo } from 'react';
+import { useSearchParams } from 'next/navigation';
 import Link from 'next/link';
 import toast from 'react-hot-toast';
 import {
@@ -35,12 +36,9 @@ import { updateElection, getVotesByElection } from '@/lib/firestore';
 import { CHART_COLORS } from '@/constants';
 import type { ElectionResult, CandidateResult } from '@/types';
 
-interface PageProps {
-  params: Promise<{ id: string }>;
-}
-
-export default function ResultsPage({ params }: PageProps) {
-  const { id: electionId } = use(params);
+function ResultsPageContent() {
+  const searchParams = useSearchParams();
+  const electionId = searchParams.get('id') ?? '';
   const { election, loading: electionLoading, error: electionError, refetch } = useElection(electionId);
   const {
     verified,
@@ -203,7 +201,7 @@ export default function ResultsPage({ params }: PageProps) {
         <Lock className="h-12 w-12 text-gray-300" />
         <p className="mt-4 text-gray-500">투표가 종료된 후에 결과를 확인할 수 있습니다.</p>
         <Link
-          href={`/admin/elections/${electionId}`}
+          href={`/admin/elections/detail?id=${electionId}`}
           className="mt-4 text-sm text-blue-600 hover:underline"
         >
           선거 관리로 돌아가기
@@ -220,7 +218,7 @@ export default function ResultsPage({ params }: PageProps) {
       <div className="flex flex-col gap-4 print:hidden sm:flex-row sm:items-center sm:justify-between">
         <div className="flex items-center gap-3">
           <Link
-            href={`/admin/elections/${electionId}`}
+            href={`/admin/elections/detail?id=${electionId}`}
             className="rounded-lg p-2 text-gray-400 transition-colors hover:bg-gray-100 hover:text-gray-600"
           >
             <ArrowLeft className="h-5 w-5" />
@@ -425,5 +423,13 @@ export default function ResultsPage({ params }: PageProps) {
         </div>
       </Modal>
     </div>
+  );
+}
+
+export default function Page() {
+  return (
+    <Suspense fallback={<div className="flex items-center justify-center py-20"><Spinner size="lg" label="로딩 중..." /></div>}>
+      <ResultsPageContent />
+    </Suspense>
   );
 }

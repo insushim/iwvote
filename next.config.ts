@@ -3,9 +3,13 @@ import type { NextConfig } from "next";
 const nextConfig: NextConfig = {
   reactStrictMode: true,
   images: {
-    domains: ['firebasestorage.googleapis.com', 'english-class-e059f.firebasestorage.app'],
+    remotePatterns: [
+      { protocol: 'https', hostname: 'firebasestorage.googleapis.com' },
+      { protocol: 'https', hostname: 'english-class-e059f.firebasestorage.app' },
+    ],
     unoptimized: true,
   },
+  output: 'export',
   trailingSlash: true,
 };
 

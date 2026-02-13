@@ -6,13 +6,27 @@ import { motion } from 'framer-motion';
 import { ArrowLeft } from 'lucide-react';
 import toast from 'react-hot-toast';
 import Link from 'next/link';
-import { doc, getDoc } from 'firebase/firestore';
+import {
+  collection,
+  doc,
+  getDoc,
+  getDocs,
+  query,
+  where,
+  orderBy,
+  limit,
+  runTransaction,
+  Timestamp,
+} from 'firebase/firestore';
 import { db } from '@/lib/firebase';
-import { COLLECTIONS } from '@/constants';
+import { COLLECTIONS, HASH_CHAIN_GENESIS } from '@/constants';
+import { encryptVote } from '@/lib/crypto';
+import { computeVoteHash, computeBlockHash } from '@/lib/hashChain';
+import { hashVoteCode } from '@/lib/voteCode';
 import { BallotPaper } from '@/components/vote/BallotPaper';
 import { VoteConfirm } from '@/components/vote/VoteConfirm';
 import { Spinner } from '@/components/ui/Spinner';
-import type { Election, VoteResponse } from '@/types';
+import type { Election, VoterCode, HashBlock, VoteReceipt } from '@/types';
 
 const ABSTENTION_ID = '__abstention__';
 
@@ -82,34 +96,154 @@ function BallotContent() {
     setSubmitting(true);
 
     try {
-      const response = await fetch('/api/vote', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          code,
-          electionId,
-          candidateId: selectedCandidateId,
-        }),
-      });
+      // 1. Hash the vote code and look up the voter code document
+      const codeHash = hashVoteCode(code);
+      const voterCodesQuery = query(
+        collection(db, COLLECTIONS.VOTER_CODES),
+        where('codeHash', '==', codeHash),
+        limit(1)
+      );
+      const voterCodesSnap = await getDocs(voterCodesQuery);
 
-      const data: VoteResponse = await response.json();
-
-      if (!response.ok || !data.success) {
-        toast.error(data.error || '투표에 실패했어요. 다시 시도해주세요.');
+      if (voterCodesSnap.empty) {
+        toast.error('유효하지 않은 투표 코드입니다.');
         setSubmitting(false);
         setConfirmOpen(false);
         return;
       }
 
+      const voterCodeDoc = voterCodesSnap.docs[0];
+      const voterCode = {
+        id: voterCodeDoc.id,
+        ...voterCodeDoc.data(),
+      } as VoterCode;
+
+      if (voterCode.used) {
+        toast.error('이미 사용된 투표 코드입니다.');
+        setSubmitting(false);
+        setConfirmOpen(false);
+        return;
+      }
+
+      // 2. Encrypt the candidateId
+      const encryptedVote = encryptVote(selectedCandidateId);
+
+      // 3. Get the latest hash chain block to compute hashes
+      const chainQuery = query(
+        collection(db, COLLECTIONS.HASH_CHAIN),
+        where('electionId', '==', electionId),
+        orderBy('index', 'desc'),
+        limit(1)
+      );
+      const latestBlockSnap = await getDocs(chainQuery);
+
+      let previousBlockHash: string;
+      let newBlockIndex: number;
+
+      if (latestBlockSnap.empty) {
+        previousBlockHash = HASH_CHAIN_GENESIS;
+        newBlockIndex = 0;
+      } else {
+        const latestBlock = latestBlockSnap.docs[0].data() as HashBlock;
+        previousBlockHash = latestBlock.blockHash;
+        newBlockIndex = latestBlock.index + 1;
+      }
+
+      // 4. Compute vote hash and block hash
+      const timestamp = Date.now();
+      const voteHash = computeVoteHash(
+        encryptedVote,
+        timestamp,
+        previousBlockHash
+      );
+      const blockHash = computeBlockHash(
+        newBlockIndex,
+        timestamp,
+        voteHash,
+        previousBlockHash
+      );
+      const firestoreTimestamp = Timestamp.fromMillis(timestamp);
+
+      // 5. Use Firestore transaction to atomically cast vote, mark code, and add block
+      await runTransaction(db, async (transaction) => {
+        // Re-read voter code inside transaction to prevent race conditions
+        const voterCodeRef = doc(db, COLLECTIONS.VOTER_CODES, voterCode.id);
+        const freshVoterCodeSnap = await transaction.get(voterCodeRef);
+
+        if (!freshVoterCodeSnap.exists()) {
+          throw new Error('투표 코드를 찾을 수 없습니다.');
+        }
+
+        const freshVoterCode = freshVoterCodeSnap.data() as VoterCode;
+        if (freshVoterCode.used) {
+          throw new Error('이미 사용된 투표 코드입니다.');
+        }
+
+        // Re-read election to verify still active
+        const electionRef = doc(db, COLLECTIONS.ELECTIONS, electionId);
+        const freshElectionSnap = await transaction.get(electionRef);
+        if (!freshElectionSnap.exists()) {
+          throw new Error('선거를 찾을 수 없습니다.');
+        }
+        const freshElection = freshElectionSnap.data() as Election;
+        if (freshElection.status !== 'active') {
+          throw new Error('현재 투표가 진행 중이 아닙니다.');
+        }
+
+        // Create vote document
+        const voteRef = doc(collection(db, COLLECTIONS.VOTES));
+        transaction.set(voteRef, {
+          electionId,
+          candidateId: selectedCandidateId,
+          encryptedVote,
+          voteHash,
+          previousHash: previousBlockHash,
+          classId: voterCode.classId,
+          timestamp: firestoreTimestamp,
+          verified: false,
+        });
+
+        // Mark voter code as used
+        transaction.update(voterCodeRef, {
+          used: true,
+          usedAt: firestoreTimestamp,
+        });
+
+        // Create new hash chain block
+        const blockRef = doc(collection(db, COLLECTIONS.HASH_CHAIN));
+        transaction.set(blockRef, {
+          electionId,
+          index: newBlockIndex,
+          timestamp: firestoreTimestamp,
+          voteHash,
+          previousHash: previousBlockHash,
+          blockHash,
+          classId: voterCode.classId,
+        });
+
+        // Increment election totalVoted and update hashChainHead
+        transaction.update(electionRef, {
+          totalVoted: (freshElection.totalVoted ?? 0) + 1,
+          hashChainHead: blockHash,
+          updatedAt: firestoreTimestamp,
+        });
+      });
+
+      // 6. Build receipt and navigate to completion page
+      const receipt: VoteReceipt = {
+        voteHash,
+        timestamp,
+        blockIndex: newBlockIndex,
+      };
+
       toast.success('투표가 완료되었어요!');
 
-      const receiptParam = data.receipt
-        ? encodeURIComponent(JSON.stringify(data.receipt))
-        : '';
-
+      const receiptParam = encodeURIComponent(JSON.stringify(receipt));
       router.push(`/vote/complete?receipt=${receiptParam}`);
-    } catch {
-      toast.error('서버에 연결할 수 없어요. 다시 시도해주세요.');
+    } catch (err) {
+      const message =
+        err instanceof Error ? err.message : '투표 처리 중 오류가 발생했어요.';
+      toast.error(message);
       setSubmitting(false);
       setConfirmOpen(false);
     }

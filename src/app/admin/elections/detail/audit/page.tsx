@@ -1,6 +1,7 @@
 'use client';
 
-import { useState, useEffect, use } from 'react';
+import { Suspense, useState, useEffect } from 'react';
+import { useSearchParams } from 'next/navigation';
 import Link from 'next/link';
 import toast from 'react-hot-toast';
 import {
@@ -23,12 +24,9 @@ import { useElection } from '@/hooks/useElection';
 import { useHashChain } from '@/hooks/useHashChain';
 import { classIdToLabel, formatDate } from '@/lib/utils';
 
-interface PageProps {
-  params: Promise<{ id: string }>;
-}
-
-export default function AuditPage({ params }: PageProps) {
-  const { id: electionId } = use(params);
+function AuditPageContent() {
+  const searchParams = useSearchParams();
+  const electionId = searchParams.get('id') ?? '';
   const { election, loading: electionLoading, error: electionError } = useElection(electionId);
   const {
     blocks,
@@ -120,7 +118,7 @@ export default function AuditPage({ params }: PageProps) {
       <div className="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
         <div className="flex items-center gap-3">
           <Link
-            href={`/admin/elections/${electionId}`}
+            href={`/admin/elections/detail?id=${electionId}`}
             className="rounded-lg p-2 text-gray-400 transition-colors hover:bg-gray-100 hover:text-gray-600"
           >
             <ArrowLeft className="h-5 w-5" />
@@ -324,5 +322,13 @@ export default function AuditPage({ params }: PageProps) {
         </div>
       </Card>
     </div>
+  );
+}
+
+export default function Page() {
+  return (
+    <Suspense fallback={<div className="flex items-center justify-center py-20"><Spinner size="lg" label="로딩 중..." /></div>}>
+      <AuditPageContent />
+    </Suspense>
   );
 }
