@@ -1,7 +1,12 @@
 import type { NextConfig } from "next";
 
 const nextConfig: NextConfig = {
-  /* config options here */
+  reactStrictMode: true,
+  images: {
+    domains: ['firebasestorage.googleapis.com', 'english-class-e059f.firebasestorage.app'],
+    unoptimized: true,
+  },
+  trailingSlash: true,
 };
 
 export default nextConfig;
