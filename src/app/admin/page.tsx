@@ -3,7 +3,6 @@
 import { useEffect, useState } from 'react';
 import { motion } from 'framer-motion';
 import { Activity, Plus, Inbox } from 'lucide-react';
-import Link from 'next/link';
 import { useAuthContext } from '@/context/AuthContext';
 import { DashboardStats, type DashboardStatsData } from '@/components/admin/DashboardStats';
 import { ElectionCard } from '@/components/admin/ElectionCard';
@@ -57,11 +56,8 @@ function formatRelativeTime(ts: { toDate: () => Date } | null): string {
   }
 }
 
-// Default school ID - in production this would come from user's profile
-const SCHOOL_ID = 'default';
-
 export default function AdminDashboardPage() {
-  const { user } = useAuthContext();
+  const { user, userProfile, isSuperAdmin } = useAuthContext();
   const [elections, setElections] = useState<Election[]>([]);
   const [auditLogs, setAuditLogs] = useState<AuditLog[]>([]);
   const [stats, setStats] = useState<DashboardStatsData>({
@@ -74,11 +70,13 @@ export default function AdminDashboardPage() {
 
   useEffect(() => {
     async function fetchDashboardData() {
+      if (!user) return;
+      const schoolId = user.uid;
       try {
         const [allElections, logs, todayVotes] = await Promise.all([
-          getElections(SCHOOL_ID),
+          getElections(schoolId),
           getAuditLogs(undefined, 10),
-          getTodayVoteCount(SCHOOL_ID),
+          getTodayVoteCount(schoolId),
         ]);
 
         setElections(allElections);
@@ -106,7 +104,7 @@ export default function AdminDashboardPage() {
             : 0;
 
         setStats({
-          activeElections: activeElections.length,
+          activeElections: allElections.length,
           todayVotes,
           avgTurnout,
           completedElections: completedElections.length,
@@ -119,9 +117,9 @@ export default function AdminDashboardPage() {
     }
 
     fetchDashboardData();
-  }, []);
+  }, [user]);
 
-  const activeElections = elections.filter((e) => e.status === 'active');
+  const recentElections = elections.slice(0, 6);
 
   if (loading) {
     return (
@@ -141,17 +139,18 @@ export default function AdminDashboardPage() {
         <div>
           <h1 className="text-xl font-bold text-gray-900 sm:text-2xl">대시보드</h1>
           <p className="mt-0.5 text-sm text-gray-500">
-            안녕하세요, {user?.displayName ?? '관리자'}님
+            안녕하세요, {userProfile?.displayName ?? user?.displayName ?? '관리자'}님
+            {isSuperAdmin && <span className="ml-1.5 inline-flex items-center rounded-full bg-blue-100 px-2 py-0.5 text-xs font-medium text-blue-700">슈퍼관리자</span>}
           </p>
         </div>
-        <Link href="/admin/elections/new">
+        <a href="/admin/elections/new/">
           <Button
             size="md"
             iconLeft={<Plus className="h-4 w-4" />}
           >
             새 선거 만들기
           </Button>
-        </Link>
+        </a>
       </div>
 
       {/* Stats grid */}
@@ -161,21 +160,21 @@ export default function AdminDashboardPage() {
       <section>
         <div className="mb-4 flex items-center justify-between">
           <h2 className="text-lg font-semibold text-gray-900">
-            진행중인 선거
+            최근 선거
           </h2>
-          {activeElections.length > 0 && (
-            <Link
-              href="/admin/elections"
+          {recentElections.length > 0 && (
+            <a
+              href="/admin/elections/"
               className="text-sm font-medium text-blue-600 hover:text-blue-700"
             >
               전체 보기
-            </Link>
+            </a>
           )}
         </div>
 
-        {activeElections.length > 0 ? (
+        {recentElections.length > 0 ? (
           <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
-            {activeElections.map((election, idx) => (
+            {recentElections.map((election, idx) => (
               <ElectionCard
                 key={election.id}
                 election={election}
@@ -191,9 +190,9 @@ export default function AdminDashboardPage() {
           >
             <Inbox className="h-12 w-12 text-gray-300" />
             <p className="mt-3 text-sm font-medium text-gray-500">
-              현재 진행중인 선거가 없습니다
+              아직 선거가 없습니다
             </p>
-            <Link href="/admin/elections/new" className="mt-4">
+            <a href="/admin/elections/new/" className="mt-4">
               <Button
                 variant="outline"
                 size="sm"
@@ -201,7 +200,7 @@ export default function AdminDashboardPage() {
               >
                 새 선거 만들기
               </Button>
-            </Link>
+            </a>
           </motion.div>
         )}
       </section>

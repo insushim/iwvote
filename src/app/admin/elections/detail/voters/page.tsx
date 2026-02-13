@@ -2,7 +2,6 @@
 
 import { Suspense, useState, useEffect, useCallback, useMemo } from 'react';
 import { useSearchParams, useRouter } from 'next/navigation';
-import Link from 'next/link';
 import { motion } from 'framer-motion';
 import toast from 'react-hot-toast';
 import {
@@ -423,13 +422,13 @@ function VotersPageContent() {
                         코드 보기
                       </Button>
                     ) : (
-                      <Link
-                        href={`/admin/elections/detail/codes?id=${electionId}&class=${classInfo.classId}`}
+                      <a
+                        href={`/admin/elections/detail/codes/?id=${electionId}&class=${classInfo.classId}`}
                       >
                         <Button variant="outline" size="sm" iconLeft={<KeyRound className="h-3.5 w-3.5" />}>
                           코드 생성
                         </Button>
-                      </Link>
+                      </a>
                     )}
                   </td>
                 </tr>
@@ -450,7 +449,7 @@ function VotersPageContent() {
 
       {/* Code generation link */}
       <div className="mt-6 flex justify-center">
-        <Link href={`/admin/elections/detail/codes?id=${electionId}`}>
+        <a href={`/admin/elections/detail/codes/?id=${electionId}`}>
           <Button
             variant="outline"
             size="lg"
@@ -458,7 +457,7 @@ function VotersPageContent() {
           >
             투표코드 관리 페이지로 이동
           </Button>
-        </Link>
+        </a>
       </div>
 
       {/* Voter codes table (inline view) */}

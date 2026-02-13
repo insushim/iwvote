@@ -2,7 +2,6 @@
 
 import { Suspense, useState, useMemo } from 'react';
 import { useSearchParams } from 'next/navigation';
-import Link from 'next/link';
 import { motion, AnimatePresence } from 'framer-motion';
 import toast from 'react-hot-toast';
 import {
@@ -78,9 +77,9 @@ function MonitorPageContent() {
     return (
       <div className="flex flex-col items-center justify-center py-20">
         <p className="text-red-500">{electionError || '선거를 찾을 수 없습니다.'}</p>
-        <Link href="/admin/elections" className="mt-4 text-sm text-blue-600 hover:underline">
+        <a href="/admin/elections/" className="mt-4 text-sm text-blue-600 hover:underline">
           선거 목록으로 돌아가기
-        </Link>
+        </a>
       </div>
     );
   }
@@ -92,12 +91,12 @@ function MonitorPageContent() {
       {/* Header */}
       <div className="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
         <div className="flex items-center gap-3">
-          <Link
-            href={`/admin/elections/detail?id=${electionId}`}
+          <a
+            href={`/admin/elections/detail/?id=${electionId}`}
             className="rounded-lg p-2 text-gray-400 transition-colors hover:bg-gray-100 hover:text-gray-600"
           >
             <ArrowLeft className="h-5 w-5" />
-          </Link>
+          </a>
           <div>
             <div className="flex items-center gap-2">
               <h1 className="text-xl font-bold text-gray-900">실시간 모니터</h1>

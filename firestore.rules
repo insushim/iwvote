@@ -1,43 +1,53 @@
 rules_version = '2';
 service cloud.firestore {
   match /databases/{database}/documents {
-    // School info: only admins can read/write
+    // School info
     match /schools/{schoolId} {
-      allow read, write: if request.auth != null &&
-        request.auth.uid in resource.data.adminIds;
-      allow create: if request.auth != null;
-    }
-
-    // Elections: admins can create/modify, active elections readable by anyone
-    match /elections/{electionId} {
-      allow read: if resource.data.status == 'active' ||
-        (request.auth != null);
+      allow read: if request.auth != null;
       allow create: if request.auth != null;
       allow update: if request.auth != null;
       allow delete: if false;
-
-      // Votes: write once only, read by admin only
-      match /votes/{voteId} {
-        allow create: if true;
-        allow read: if request.auth != null;
-        allow update, delete: if false;
-      }
-
-      // Voter codes: admin managed
-      match /voterCodes/{codeId} {
-        allow read, write: if request.auth != null;
-        allow update: if true;
-      }
-
-      // Hash chain: anyone can read (for verification), only server writes
-      match /hashChain/{blockId} {
-        allow read: if true;
-        allow create: if true;
-        allow update, delete: if false;
-      }
     }
 
-    // Audit logs: read only
+    // Elections
+    match /elections/{electionId} {
+      allow read: if true;
+      allow create: if request.auth != null;
+      allow update: if request.auth != null;
+      allow delete: if false;
+    }
+
+    // Votes (top-level collection)
+    match /votes/{voteId} {
+      allow create: if true;
+      allow read: if request.auth != null;
+      allow update, delete: if false;
+    }
+
+    // Voter codes (top-level collection)
+    match /voterCodes/{codeId} {
+      allow read: if true;
+      allow create: if request.auth != null;
+      allow update: if true;
+      allow delete: if false;
+    }
+
+    // Hash chain (top-level collection)
+    match /hashChain/{blockId} {
+      allow read: if true;
+      allow create: if true;
+      allow update, delete: if false;
+    }
+
+    // Users
+    match /users/{userId} {
+      allow read: if request.auth != null;
+      allow create: if request.auth != null && request.auth.uid == userId;
+      allow update: if request.auth != null;
+      allow delete: if request.auth != null;
+    }
+
+    // Audit logs
     match /auditLogs/{logId} {
       allow read: if request.auth != null;
       allow create: if true;

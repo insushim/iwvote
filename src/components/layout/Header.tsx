@@ -58,7 +58,7 @@ export function Header() {
           {navItems.map((item) => {
             const isActive =
               item.href === '/admin'
-                ? pathname === '/admin'
+                ? pathname === '/admin' || pathname === '/admin/'
                 : pathname.startsWith(item.href);
 
             return (
@@ -119,7 +119,7 @@ export function Header() {
               {navItems.map((item) => {
                 const isActive =
                   item.href === '/admin'
-                    ? pathname === '/admin'
+                    ? pathname === '/admin' || pathname === '/admin/'
                     : pathname.startsWith(item.href);
 
                 return (

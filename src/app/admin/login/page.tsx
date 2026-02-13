@@ -132,7 +132,9 @@ export default function AdminLoginPage() {
           {/* Footer text */}
           <p className="mt-6 text-center text-xs text-gray-400">
             관리자 계정이 없으신가요?{' '}
-            <span className="text-gray-500">학교 관리자에게 문의하세요.</span>
+            <a href="/admin/register/" className="font-medium text-blue-400 hover:text-blue-300 transition-colors">
+              회원가입
+            </a>
           </p>
         </div>
 

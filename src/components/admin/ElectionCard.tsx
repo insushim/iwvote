@@ -1,6 +1,5 @@
 'use client';
 
-import Link from 'next/link';
 import { motion } from 'framer-motion';
 import { Calendar, Users, ArrowRight } from 'lucide-react';
 import { Badge } from '@/components/ui/Badge';
@@ -126,7 +125,7 @@ export function ElectionCard({ election, index = 0 }: ElectionCardProps) {
 
       {/* Action button */}
       <div className="mt-4 flex justify-end">
-        <Link href={`/admin/elections/detail?id=${election.id}`}>
+        <a href={`/admin/elections/detail/?id=${election.id}`}>
           <Button
             variant="outline"
             size="sm"
@@ -136,7 +135,7 @@ export function ElectionCard({ election, index = 0 }: ElectionCardProps) {
           >
             관리
           </Button>
-        </Link>
+        </a>
       </div>
     </motion.div>
   );

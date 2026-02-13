@@ -23,7 +23,7 @@ interface StatCardConfig {
 const statCards: StatCardConfig[] = [
   {
     key: 'activeElections',
-    label: '진행중인 선거',
+    label: '전체 선거',
     icon: '📊',
     suffix: '개',
     bgColor: 'bg-blue-50',

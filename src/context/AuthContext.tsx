@@ -10,95 +10,133 @@ import {
 } from 'react';
 import { type User } from 'firebase/auth';
 import {
-  doc,
-  getDoc,
-} from 'firebase/firestore';
-import { db } from '@/lib/firebase';
-import {
   signInWithEmail,
+  signUpWithEmail,
   signOut as authSignOut,
   onAuthChange,
 } from '@/lib/auth';
-import { COLLECTIONS } from '@/constants';
+import {
+  getUserProfile,
+  createUserProfile,
+  hasSuperAdmin,
+  createSchoolWithId,
+} from '@/lib/firestore';
+import type { UserProfile, UserRole } from '@/types';
 
 interface AuthContextValue {
   user: User | null;
+  userProfile: UserProfile | null;
   loading: boolean;
   isAdmin: boolean;
+  isSuperAdmin: boolean;
+  isPending: boolean;
   signIn: (email: string, password: string) => Promise<void>;
+  signUp: (email: string, password: string, displayName: string, schoolName: string) => Promise<void>;
   signOut: () => Promise<void>;
+  refreshProfile: () => Promise<void>;
 }
 
 const AuthContext = createContext<AuthContextValue | null>(null);
 
-/**
- * Check if the user is an admin by looking up their UID in the schools collection.
- * A user is considered an admin if they appear in any school's adminIds array,
- * or if they own a school document (document ID matches their UID).
- */
-async function checkAdminStatus(user: User): Promise<boolean> {
-  try {
-    // Check if user owns a school document (school ID = user UID)
-    const schoolDoc = await getDoc(doc(db, COLLECTIONS.SCHOOLS, user.uid));
-    if (schoolDoc.exists()) {
-      const data = schoolDoc.data();
-      // User is an admin if they are in the adminIds array or if the doc exists with their ID
-      if (
-        data.adminIds &&
-        Array.isArray(data.adminIds) &&
-        data.adminIds.includes(user.uid)
-      ) {
-        return true;
-      }
-      // If the document exists with the user's UID as the ID, they are an admin
-      return true;
-    }
-
-    return false;
-  } catch {
-    console.error('관리자 권한 확인 실패');
-    return false;
-  }
-}
-
 export function AuthProvider({ children }: { children: ReactNode }) {
   const [user, setUser] = useState<User | null>(null);
+  const [userProfile, setUserProfile] = useState<UserProfile | null>(null);
   const [loading, setLoading] = useState(true);
-  const [isAdmin, setIsAdmin] = useState(false);
+
+  const loadProfile = useCallback(async (firebaseUser: User | null) => {
+    if (!firebaseUser) {
+      setUserProfile(null);
+      return;
+    }
+
+    try {
+      const profile = await getUserProfile(firebaseUser.uid);
+      setUserProfile(profile);
+    } catch {
+      console.error('사용자 프로필 로드 실패');
+      setUserProfile(null);
+    }
+  }, []);
 
   useEffect(() => {
     const unsubscribe = onAuthChange(async (firebaseUser) => {
       setUser(firebaseUser);
-
-      if (firebaseUser) {
-        const adminStatus = await checkAdminStatus(firebaseUser);
-        setIsAdmin(adminStatus);
-      } else {
-        setIsAdmin(false);
-      }
-
+      await loadProfile(firebaseUser);
       setLoading(false);
     });
 
     return unsubscribe;
-  }, []);
+  }, [loadProfile]);
 
   const signIn = useCallback(async (email: string, password: string) => {
     const loggedInUser = await signInWithEmail(email, password);
     setUser(loggedInUser);
+    await loadProfile(loggedInUser);
+  }, [loadProfile]);
 
-    const adminStatus = await checkAdminStatus(loggedInUser);
-    setIsAdmin(adminStatus);
-  }, []);
+  const signUp = useCallback(async (
+    email: string,
+    password: string,
+    displayName: string,
+    schoolName: string
+  ) => {
+    const newUser = await signUpWithEmail(email, password, displayName);
+
+    // First user becomes superadmin; subsequent users are pending
+    const superAdminExists = await hasSuperAdmin();
+    const role: UserRole = superAdminExists ? 'pending' : 'superadmin';
+    const approved = !superAdminExists;
+
+    await createUserProfile(newUser.uid, {
+      email: newUser.email ?? email,
+      displayName,
+      schoolName,
+      role,
+      approved,
+    });
+
+    // Auto-create school document with user UID as school ID
+    await createSchoolWithId(newUser.uid, {
+      name: schoolName,
+      grades: [4, 5, 6],
+      classesPerGrade: { 4: 3, 5: 3, 6: 3 },
+      studentsPerClass: {},
+      adminIds: [newUser.uid],
+    });
+
+    setUser(newUser);
+    await loadProfile(newUser);
+  }, [loadProfile]);
 
   const signOut = useCallback(async () => {
     await authSignOut();
     setUser(null);
-    setIsAdmin(false);
+    setUserProfile(null);
   }, []);
 
+  const refreshProfile = useCallback(async () => {
+    if (user) {
+      await loadProfile(user);
+    }
+  }, [user, loadProfile]);
+
+  const isAdmin = userProfile?.approved === true && (userProfile.role === 'admin' || userProfile.role === 'superadmin');
+  const isSuperAdmin = userProfile?.role === 'superadmin';
+  const isPending = userProfile?.role === 'pending' || (userProfile !== null && !userProfile.approved);
+
   return (
-    <AuthContext.Provider value={{ user, loading, isAdmin, signIn, signOut }}>
+    <AuthContext.Provider value={{
+      user,
+      userProfile,
+      loading,
+      isAdmin,
+      isSuperAdmin,
+      isPending,
+      signIn,
+      signUp,
+      signOut,
+      refreshProfile,
+    }}>
       {children}
     </AuthContext.Provider>
   );

@@ -90,4 +90,5 @@ export const COLLECTIONS = {
   VOTER_CODES: 'voterCodes',
   HASH_CHAIN: 'hashChain',
   AUDIT_LOGS: 'auditLogs',
+  USERS: 'users',
 } as const;

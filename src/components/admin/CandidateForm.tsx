@@ -1,8 +1,10 @@
 'use client';
 
-import { useState, useCallback } from 'react';
+import { useState, useCallback, useRef } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
-import { Plus, Trash2, GripVertical, Image, AlertCircle } from 'lucide-react';
+import { Plus, Trash2, GripVertical, Image, AlertCircle, Loader2, Upload, X } from 'lucide-react';
+import { ref, uploadBytes, getDownloadURL } from 'firebase/storage';
+import { storage } from '@/lib/firebase';
 import { Button } from '@/components/ui/Button';
 import { Input } from '@/components/ui/Input';
 import { Card } from '@/components/ui/Card';
@@ -35,6 +37,8 @@ export function CandidateForm({
   disabled = false,
 }: CandidateFormProps) {
   const [collapsed, setCollapsed] = useState(false);
+  const [uploading, setUploading] = useState(false);
+  const fileInputRef = useRef<HTMLInputElement>(null);
 
   const handleChange = useCallback(
     (field: keyof CandidateFormData, value: CandidateFormData[keyof CandidateFormData]) => {
@@ -64,6 +68,43 @@ export function CandidateForm({
     },
     [candidate.pledges, handleChange]
   );
+
+  const handleFileUpload = useCallback(
+    async (file: File) => {
+      if (!file.type.startsWith('image/')) {
+        alert('이미지 파일만 업로드할 수 있습니다.');
+        return;
+      }
+      if (file.size > 5 * 1024 * 1024) {
+        alert('파일 크기는 5MB 이하여야 합니다.');
+        return;
+      }
+
+      setUploading(true);
+      try {
+        const storageRef = ref(storage, `candidates/${Date.now()}_${file.name}`);
+        await uploadBytes(storageRef, file);
+        const downloadUrl = await getDownloadURL(storageRef);
+        handleChange('photoURL', downloadUrl);
+      } catch (error) {
+        console.error('Photo upload failed:', error);
+        alert('사진 업로드에 실패했습니다. 다시 시도해주세요.');
+      } finally {
+        setUploading(false);
+        if (fileInputRef.current) {
+          fileInputRef.current.value = '';
+        }
+      }
+    },
+    [handleChange]
+  );
+
+  const handleRemovePhoto = useCallback(() => {
+    handleChange('photoURL', '');
+    if (fileInputRef.current) {
+      fileInputRef.current.value = '';
+    }
+  }, [handleChange]);
 
   return (
     <motion.div
@@ -128,7 +169,7 @@ export function CandidateForm({
               className="overflow-hidden"
             >
               <div className="space-y-4 p-4">
-                {/* Name & Photo URL Row */}
+                {/* Name & Photo Upload Row */}
                 <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
                   <Input
                     label="이름"
@@ -138,14 +179,64 @@ export function CandidateForm({
                     error={errors.name}
                     disabled={disabled}
                   />
-                  <Input
-                    label="사진 URL"
-                    value={candidate.photoURL}
-                    onChange={(e) => handleChange('photoURL', e.target.value)}
-                    placeholder="https://example.com/photo.jpg"
-                    iconPrefix={<Image className="h-4 w-4" />}
-                    disabled={disabled}
-                  />
+                  <div className="w-full">
+                    <label className="mb-1.5 block text-sm font-medium text-gray-700">
+                      후보자 사진
+                    </label>
+                    <input
+                      ref={fileInputRef}
+                      type="file"
+                      accept="image/*"
+                      className="hidden"
+                      disabled={disabled || uploading}
+                      onChange={(e) => {
+                        const file = e.target.files?.[0];
+                        if (file) handleFileUpload(file);
+                      }}
+                    />
+                    {candidate.photoURL ? (
+                      <div className="flex items-center gap-3 rounded-lg border border-gray-300 bg-white p-2">
+                        <img
+                          src={candidate.photoURL}
+                          alt="후보자 사진"
+                          className="h-16 w-16 shrink-0 rounded-lg object-cover border border-gray-200"
+                        />
+                        <div className="flex-1 min-w-0">
+                          <p className="truncate text-sm text-gray-600">사진 업로드 완료</p>
+                        </div>
+                        {!disabled && (
+                          <button
+                            type="button"
+                            onClick={handleRemovePhoto}
+                            className="shrink-0 rounded-md p-1.5 text-gray-400 transition-colors hover:bg-red-50 hover:text-red-500"
+                            aria-label="사진 삭제"
+                          >
+                            <X className="h-4 w-4" />
+                          </button>
+                        )}
+                      </div>
+                    ) : uploading ? (
+                      <div className="flex items-center justify-center gap-2 rounded-lg border-2 border-dashed border-blue-300 bg-blue-50/50 p-4">
+                        <Loader2 className="h-5 w-5 animate-spin text-blue-500" />
+                        <span className="text-sm text-blue-600">업로드 중...</span>
+                      </div>
+                    ) : (
+                      <button
+                        type="button"
+                        onClick={() => fileInputRef.current?.click()}
+                        disabled={disabled}
+                        className={cn(
+                          'flex w-full items-center justify-center gap-2 rounded-lg border-2 border-dashed p-4 transition-colors',
+                          'border-gray-300 bg-gray-50/50 text-gray-500',
+                          'hover:border-blue-400 hover:bg-blue-50/50 hover:text-blue-600',
+                          'disabled:cursor-not-allowed disabled:opacity-60 disabled:hover:border-gray-300 disabled:hover:bg-gray-50/50 disabled:hover:text-gray-500'
+                        )}
+                      >
+                        <Upload className="h-5 w-5" />
+                        <span className="text-sm font-medium">사진 업로드</span>
+                      </button>
+                    )}
+                  </div>
                 </div>
 
                 {/* Grade & Class Row */}

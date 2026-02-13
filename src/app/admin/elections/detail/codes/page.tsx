@@ -2,7 +2,6 @@
 
 import { Suspense, useState, useEffect, useCallback, useMemo } from 'react';
 import { useSearchParams } from 'next/navigation';
-import Link from 'next/link';
 import { motion } from 'framer-motion';
 import toast from 'react-hot-toast';
 import {
@@ -21,18 +20,28 @@ import { Modal } from '@/components/ui/Modal';
 import { CodeGenerator } from '@/components/admin/CodeGenerator';
 import { CodePrintSheet } from '@/components/admin/CodePrintSheet';
 import { useElection } from '@/hooks/useElection';
+import { useAuthContext } from '@/context/AuthContext';
+import { getSchool } from '@/lib/firestore';
 import { classIdToLabel, formatDate } from '@/lib/utils';
-import type { VoterCode } from '@/types';
+import type { VoterCode, School } from '@/types';
 
 function CodesPageContent() {
   const searchParams = useSearchParams();
   const electionId = searchParams.get('id') ?? '';
   const { election, loading: electionLoading, error: electionError } = useElection(electionId);
+  const { user } = useAuthContext();
 
   const [codes, setCodes] = useState<VoterCode[]>([]);
   const [codesLoading, setCodesLoading] = useState(true);
   const [selectedClass, setSelectedClass] = useState<string | null>(null);
   const [showGenerator, setShowGenerator] = useState(false);
+  const [school, setSchool] = useState<School | null>(null);
+
+  // Fetch school data for student counts and class info
+  useEffect(() => {
+    if (!user) return;
+    getSchool(user.uid).then(setSchool).catch(() => {});
+  }, [user]);
 
   const fetchCodes = useCallback(async () => {
     setCodesLoading(true);
@@ -97,14 +106,31 @@ function CodesPageContent() {
   // Classes config for CodeGenerator
   const classConfigs = useMemo(() => {
     if (!election) return [];
-    return election.targetClasses.map((classId) => {
-      const parts = classId.split('-');
-      const grade = parseInt(parts[0], 10);
-      const classNum = parseInt(parts[1], 10);
-      // Use school studentsPerClass if available, default to 30
-      return { classId, count: 30 };
-    });
-  }, [election]);
+
+    // If election has explicit targetClasses, use those
+    if (election.targetClasses.length > 0) {
+      return election.targetClasses.map((classId) => {
+        const studentCount = school?.studentsPerClass?.[classId] || 30;
+        return { classId, count: studentCount };
+      });
+    }
+
+    // For school_president: derive from targetGrades + school classesPerGrade
+    if (election.targetGrades.length > 0 && school) {
+      const configs: { classId: string; count: number }[] = [];
+      for (const grade of election.targetGrades) {
+        const numClasses = school.classesPerGrade?.[grade] || 3;
+        for (let c = 1; c <= numClasses; c++) {
+          const classId = `${grade}-${c}`;
+          const studentCount = school.studentsPerClass?.[classId] || 30;
+          configs.push({ classId, count: studentCount });
+        }
+      }
+      return configs;
+    }
+
+    return [];
+  }, [election, school]);
 
   // Print codes for selected class
   const printCodes = useMemo(() => {
@@ -183,9 +209,9 @@ function CodesPageContent() {
     return (
       <div className="flex flex-col items-center justify-center py-20">
         <p className="text-red-500">{electionError || '선거를 찾을 수 없습니다.'}</p>
-        <Link href="/admin/elections" className="mt-4 text-sm text-blue-600 hover:underline">
+        <a href="/admin/elections/" className="mt-4 text-sm text-blue-600 hover:underline">
           선거 목록으로 돌아가기
-        </Link>
+        </a>
       </div>
     );
   }
@@ -198,12 +224,12 @@ function CodesPageContent() {
       {/* Header */}
       <div className="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
         <div className="flex items-center gap-3">
-          <Link
-            href={`/admin/elections/detail?id=${electionId}`}
+          <a
+            href={`/admin/elections/detail/?id=${electionId}`}
             className="rounded-lg p-2 text-gray-400 transition-colors hover:bg-gray-100 hover:text-gray-600"
           >
             <ArrowLeft className="h-5 w-5" />
-          </Link>
+          </a>
           <div>
             <h1 className="text-xl font-bold text-gray-900">투표 코드 관리</h1>
             <p className="text-sm text-gray-500">{election.title}</p>
@@ -371,9 +397,15 @@ function CodesPageContent() {
         <CodeGenerator
           electionId={electionId}
           classes={classConfigs}
-          onCodesGenerated={() => {
+          onCodesGenerated={async () => {
             setShowGenerator(false);
-            fetchCodes();
+            await fetchCodes();
+            // Update total voters count
+            if (election) {
+              const totalCount = classConfigs.reduce((sum, c) => sum + c.count, 0);
+              const { updateElection } = await import('@/lib/firestore');
+              await updateElection(electionId, { totalVoters: totalCount });
+            }
           }}
         />
       </Modal>

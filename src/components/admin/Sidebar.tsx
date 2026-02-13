@@ -1,13 +1,13 @@
 'use client';
 
 import { useState } from 'react';
-import Link from 'next/link';
 import { usePathname } from 'next/navigation';
 import { motion, AnimatePresence } from 'framer-motion';
 import {
   LayoutDashboard,
   Vote,
   Settings,
+  Users,
   LogOut,
   ChevronLeft,
   ChevronRight,
@@ -22,24 +22,6 @@ interface SidebarItem {
   icon: React.ReactNode;
 }
 
-const sidebarItems: SidebarItem[] = [
-  {
-    label: '대시보드',
-    href: '/admin',
-    icon: <LayoutDashboard className="h-5 w-5" />,
-  },
-  {
-    label: '선거 관리',
-    href: '/admin/elections',
-    icon: <Vote className="h-5 w-5" />,
-  },
-  {
-    label: '설정',
-    href: '/admin/settings',
-    icon: <Settings className="h-5 w-5" />,
-  },
-];
-
 interface SidebarProps {
   collapsed?: boolean;
   onToggle?: () => void;
@@ -47,7 +29,14 @@ interface SidebarProps {
 
 export function Sidebar({ collapsed = false, onToggle }: SidebarProps) {
   const pathname = usePathname();
-  const { user, signOut } = useAuthContext();
+  const { user, signOut, isSuperAdmin } = useAuthContext();
+
+  const navItems: SidebarItem[] = [
+    { label: '대시보드', href: '/admin', icon: <LayoutDashboard className="h-5 w-5" /> },
+    { label: '선거 관리', href: '/admin/elections', icon: <Vote className="h-5 w-5" /> },
+    ...(isSuperAdmin ? [{ label: '사용자 관리', href: '/admin/users', icon: <Users className="h-5 w-5" /> }] : []),
+    { label: '설정', href: '/admin/settings', icon: <Settings className="h-5 w-5" /> },
+  ];
 
   const handleSignOut = async () => {
     await signOut();
@@ -68,20 +57,20 @@ export function Sidebar({ collapsed = false, onToggle }: SidebarProps) {
         )}
       >
         {!collapsed && (
-          <Link
-            href="/admin"
+          <a
+            href="/admin/"
             className="flex items-center gap-2 text-lg font-bold text-white"
           >
             <span className="text-xl" role="img" aria-label="투표함">
               🗳️
             </span>
             <span>{APP_NAME}</span>
-          </Link>
+          </a>
         )}
         {collapsed && (
-          <Link href="/admin" className="text-xl" aria-label={APP_NAME}>
+          <a href="/admin/" className="text-xl" aria-label={APP_NAME}>
             🗳️
-          </Link>
+          </a>
         )}
         {onToggle && !collapsed && (
           <button
@@ -109,16 +98,16 @@ export function Sidebar({ collapsed = false, onToggle }: SidebarProps) {
 
       {/* Navigation items */}
       <nav className="mt-4 flex-1 space-y-1 px-2">
-        {sidebarItems.map((item) => {
+        {navItems.map((item) => {
           const isActive =
             item.href === '/admin'
-              ? pathname === '/admin'
+              ? pathname === '/admin' || pathname === '/admin/'
               : pathname.startsWith(item.href);
 
           return (
-            <Link
+            <a
               key={item.href}
-              href={item.href}
+              href={`${item.href}/`}
               className={cn(
                 'group flex items-center gap-3 rounded-lg px-3 py-2.5 text-sm font-medium transition-colors',
                 isActive
@@ -130,7 +119,7 @@ export function Sidebar({ collapsed = false, onToggle }: SidebarProps) {
             >
               <span className="shrink-0">{item.icon}</span>
               {!collapsed && <span>{item.label}</span>}
-            </Link>
+            </a>
           );
         })}
       </nav>

@@ -17,6 +17,7 @@ import {
 } from 'firebase/firestore';
 import { db } from '@/lib/firebase';
 import { COLLECTIONS } from '@/constants';
+import { setDoc, deleteDoc } from 'firebase/firestore';
 import type {
   School,
   Election,
@@ -26,7 +27,91 @@ import type {
   HashBlock,
   AuditLog,
   AuditAction,
+  UserProfile,
+  UserRole,
 } from '@/types';
+
+// ============================================================
+// Users
+// ============================================================
+
+/**
+ * Create a user profile document (doc ID = Firebase Auth UID).
+ */
+export async function createUserProfile(
+  uid: string,
+  data: Omit<UserProfile, 'id' | 'createdAt' | 'approvedAt' | 'approvedBy'>
+): Promise<void> {
+  await setDoc(doc(db, COLLECTIONS.USERS, uid), {
+    ...data,
+    createdAt: serverTimestamp(),
+    approvedAt: null,
+    approvedBy: null,
+  });
+}
+
+/**
+ * Get user profile by UID.
+ */
+export async function getUserProfile(uid: string): Promise<UserProfile | null> {
+  const docSnap = await getDoc(doc(db, COLLECTIONS.USERS, uid));
+  if (!docSnap.exists()) return null;
+  return { id: docSnap.id, ...docSnap.data() } as UserProfile;
+}
+
+/**
+ * Check if any superadmin exists.
+ */
+export async function hasSuperAdmin(): Promise<boolean> {
+  const q = query(
+    collection(db, COLLECTIONS.USERS),
+    where('role', '==', 'superadmin'),
+    limit(1)
+  );
+  const snapshot = await getDocs(q);
+  return !snapshot.empty;
+}
+
+/**
+ * Get all users, optionally filtered by role.
+ */
+export async function getUsers(role?: UserRole): Promise<UserProfile[]> {
+  const constraints: QueryConstraint[] = [];
+  if (role) {
+    constraints.push(where('role', '==', role));
+  }
+  constraints.push(orderBy('createdAt', 'desc'));
+
+  const q = query(collection(db, COLLECTIONS.USERS), ...constraints);
+  const snapshot = await getDocs(q);
+  return snapshot.docs.map((d) => ({ id: d.id, ...d.data() }) as UserProfile);
+}
+
+/**
+ * Approve a pending user (set role to admin).
+ */
+export async function approveUser(uid: string, approverUid: string): Promise<void> {
+  await updateDoc(doc(db, COLLECTIONS.USERS, uid), {
+    role: 'admin',
+    approved: true,
+    approvedAt: serverTimestamp(),
+    approvedBy: approverUid,
+  });
+}
+
+/**
+ * Reject (delete) a pending user.
+ */
+export async function rejectUser(uid: string): Promise<void> {
+  await deleteDoc(doc(db, COLLECTIONS.USERS, uid));
+}
+
+/**
+ * Update user role.
+ */
+export async function updateUserRole(uid: string, role: UserRole): Promise<void> {
+  await updateDoc(doc(db, COLLECTIONS.USERS, uid), { role });
+}
 
 // ============================================================
 // Schools
@@ -43,7 +128,21 @@ export async function getSchool(schoolId: string): Promise<School | null> {
 }
 
 /**
- * Create a new school document.
+ * Create a school document with a specific ID (typically user UID).
+ */
+export async function createSchoolWithId(
+  schoolId: string,
+  data: Omit<School, 'id' | 'createdAt' | 'updatedAt'>
+): Promise<void> {
+  await setDoc(doc(db, COLLECTIONS.SCHOOLS, schoolId), {
+    ...data,
+    createdAt: serverTimestamp(),
+    updatedAt: serverTimestamp(),
+  });
+}
+
+/**
+ * Create a new school document with auto-generated ID.
  */
 export async function createSchool(
   data: Omit<School, 'id' | 'createdAt' | 'updatedAt'>
@@ -54,6 +153,35 @@ export async function createSchool(
     updatedAt: serverTimestamp(),
   });
   return docRef.id;
+}
+
+/**
+ * Save school settings. Creates the document if it doesn't exist, otherwise updates.
+ */
+export async function saveSchool(
+  schoolId: string,
+  data: Partial<Omit<School, 'id' | 'createdAt'>>
+): Promise<void> {
+  const docRef = doc(db, COLLECTIONS.SCHOOLS, schoolId);
+  const docSnap = await getDoc(docRef);
+
+  if (docSnap.exists()) {
+    await updateDoc(docRef, {
+      ...data,
+      updatedAt: serverTimestamp(),
+    });
+  } else {
+    await setDoc(docRef, {
+      name: '',
+      grades: [],
+      classesPerGrade: {},
+      studentsPerClass: {},
+      adminIds: [],
+      ...data,
+      createdAt: serverTimestamp(),
+      updatedAt: serverTimestamp(),
+    });
+  }
 }
 
 /**

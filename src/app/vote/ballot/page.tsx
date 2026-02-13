@@ -5,7 +5,7 @@ import { useRouter, useSearchParams } from 'next/navigation';
 import { motion } from 'framer-motion';
 import { ArrowLeft } from 'lucide-react';
 import toast from 'react-hot-toast';
-import Link from 'next/link';
+
 import {
   collection,
   doc,
@@ -278,13 +278,13 @@ function BallotContent() {
           <p className="mt-2 text-sm text-gray-500">
             투표 코드를 다시 입력해주세요
           </p>
-          <Link
-            href="/vote"
+          <a
+            href="/vote/"
             className="mt-4 inline-flex items-center gap-1 rounded-lg bg-blue-600 px-4 py-2 text-sm font-medium text-white transition-colors hover:bg-blue-700"
           >
             <ArrowLeft className="h-4 w-4" />
             다시 시도하기
-          </Link>
+          </a>
         </div>
       </div>
     );
@@ -294,13 +294,13 @@ function BallotContent() {
     <div className="flex min-h-dvh flex-col bg-gradient-to-b from-sky-50 to-white">
       {/* Header */}
       <header className="flex items-center gap-3 px-4 py-4">
-        <Link
-          href="/vote"
+        <a
+          href="/vote/"
           className="flex h-10 w-10 items-center justify-center rounded-xl text-gray-500 transition-colors hover:bg-gray-100"
           aria-label="뒤로 돌아가기"
         >
           <ArrowLeft className="h-5 w-5" />
-        </Link>
+        </a>
         <h1 className="text-lg font-bold text-gray-900">투표 용지</h1>
       </header>
 

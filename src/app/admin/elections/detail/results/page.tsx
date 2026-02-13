@@ -2,7 +2,6 @@
 
 import { Suspense, useState, useEffect, useCallback, useMemo } from 'react';
 import { useSearchParams } from 'next/navigation';
-import Link from 'next/link';
 import toast from 'react-hot-toast';
 import {
   ArrowLeft,
@@ -187,9 +186,9 @@ function ResultsPageContent() {
     return (
       <div className="flex flex-col items-center justify-center py-20">
         <p className="text-red-500">{electionError || '선거를 찾을 수 없습니다.'}</p>
-        <Link href="/admin/elections" className="mt-4 text-sm text-blue-600 hover:underline">
+        <a href="/admin/elections/" className="mt-4 text-sm text-blue-600 hover:underline">
           선거 목록으로 돌아가기
-        </Link>
+        </a>
       </div>
     );
   }
@@ -200,12 +199,12 @@ function ResultsPageContent() {
       <div className="flex flex-col items-center justify-center py-20">
         <Lock className="h-12 w-12 text-gray-300" />
         <p className="mt-4 text-gray-500">투표가 종료된 후에 결과를 확인할 수 있습니다.</p>
-        <Link
-          href={`/admin/elections/detail?id=${electionId}`}
+        <a
+          href={`/admin/elections/detail/?id=${electionId}`}
           className="mt-4 text-sm text-blue-600 hover:underline"
         >
           선거 관리로 돌아가기
-        </Link>
+        </a>
       </div>
     );
   }
@@ -217,12 +216,12 @@ function ResultsPageContent() {
       {/* Header */}
       <div className="flex flex-col gap-4 print:hidden sm:flex-row sm:items-center sm:justify-between">
         <div className="flex items-center gap-3">
-          <Link
-            href={`/admin/elections/detail?id=${electionId}`}
+          <a
+            href={`/admin/elections/detail/?id=${electionId}`}
             className="rounded-lg p-2 text-gray-400 transition-colors hover:bg-gray-100 hover:text-gray-600"
           >
             <ArrowLeft className="h-5 w-5" />
-          </Link>
+          </a>
           <div>
             <h1 className="text-xl font-bold text-gray-900">선거 결과</h1>
             <p className="text-sm text-gray-500">{election.title}</p>

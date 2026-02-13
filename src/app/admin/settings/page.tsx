@@ -15,13 +15,13 @@ import { Card } from '@/components/ui/Card';
 import { Input } from '@/components/ui/Input';
 import { Badge } from '@/components/ui/Badge';
 import { Spinner } from '@/components/ui/Spinner';
-import { useAuth } from '@/hooks/useAuth';
-import { getSchool, updateSchool } from '@/lib/firestore';
+import { useAuthContext } from '@/context/AuthContext';
+import { getSchool, saveSchool } from '@/lib/firestore';
 import { DEFAULT_GRADES } from '@/constants';
 import type { School as SchoolType } from '@/types';
 
 export default function SettingsPage() {
-  const { user, loading: authLoading } = useAuth();
+  const { user, loading: authLoading, userProfile } = useAuthContext();
 
   const [schoolName, setSchoolName] = useState('');
   const [selectedGrades, setSelectedGrades] = useState<number[]>([]);
@@ -39,17 +39,17 @@ export default function SettingsPage() {
     setLoading(true);
 
     try {
+      setSchoolId(user.uid);
       const school = await getSchool(user.uid);
       if (school) {
-        setSchoolId(school.id);
-        setSchoolName(school.name);
-        setSelectedGrades(school.grades || []);
-        setClassesPerGrade(school.classesPerGrade || {});
+        setSchoolName(school.name || userProfile?.schoolName || '');
+        setSelectedGrades(school.grades || [4, 5, 6]);
+        setClassesPerGrade(school.classesPerGrade || { 4: 3, 5: 3, 6: 3 });
         setStudentsPerClass(school.studentsPerClass || {});
-        setAdminEmails(school.adminIds || []);
+        setAdminEmails(school.adminIds || (user.email ? [user.email] : []));
       } else {
-        // New school - set defaults
-        setSchoolId(user.uid);
+        // No school document yet - set defaults from user profile
+        setSchoolName(userProfile?.schoolName || '');
         setSelectedGrades([4, 5, 6]);
         const defaultClasses: Record<number, number> = {};
         [4, 5, 6].forEach((g) => {
@@ -167,7 +167,7 @@ export default function SettingsPage() {
 
     setSaving(true);
     try {
-      await updateSchool(schoolId, {
+      await saveSchool(schoolId, {
         name: schoolName.trim(),
         grades: selectedGrades,
         classesPerGrade,

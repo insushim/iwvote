@@ -120,6 +120,21 @@ export interface AuditLog {
   ipHash: string;
 }
 
+// ===== User Profile =====
+export type UserRole = 'pending' | 'admin' | 'superadmin';
+
+export interface UserProfile {
+  id: string;
+  email: string;
+  displayName: string;
+  schoolName: string;
+  role: UserRole;
+  approved: boolean;
+  createdAt: Timestamp;
+  approvedAt: Timestamp | null;
+  approvedBy: string | null;
+}
+
 // ===== UI Types =====
 export interface ClassVoteCount {
   classId: string;

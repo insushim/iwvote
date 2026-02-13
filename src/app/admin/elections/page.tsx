@@ -1,12 +1,12 @@
 'use client';
 
 import { useEffect, useState, useMemo } from 'react';
-import Link from 'next/link';
 import { motion, AnimatePresence } from 'framer-motion';
 import { Plus, Inbox, Search } from 'lucide-react';
 import { ElectionCard } from '@/components/admin/ElectionCard';
 import { Button } from '@/components/ui/Button';
 import { Spinner } from '@/components/ui/Spinner';
+import { useAuthContext } from '@/context/AuthContext';
 import { getElections } from '@/lib/firestore';
 import type { Election, ElectionStatus } from '@/types';
 
@@ -24,10 +24,8 @@ const filterTabs: TabConfig[] = [
   { key: 'closed', label: '완료', statuses: ['closed', 'finalized'] },
 ];
 
-// Default school ID - in production this would come from user's profile
-const SCHOOL_ID = 'default';
-
 export default function ElectionsPage() {
+  const { user } = useAuthContext();
   const [elections, setElections] = useState<Election[]>([]);
   const [loading, setLoading] = useState(true);
   const [activeTab, setActiveTab] = useState<FilterTab>('all');
@@ -35,8 +33,9 @@ export default function ElectionsPage() {
 
   useEffect(() => {
     async function fetchElections() {
+      if (!user) return;
       try {
-        const data = await getElections(SCHOOL_ID);
+        const data = await getElections(user.uid);
         setElections(data);
       } catch (err) {
         console.error('Failed to fetch elections:', err);
@@ -46,7 +45,7 @@ export default function ElectionsPage() {
     }
 
     fetchElections();
-  }, []);
+  }, [user]);
 
   const filteredElections = useMemo(() => {
     const currentTab = filterTabs.find((t) => t.key === activeTab);
@@ -102,14 +101,14 @@ export default function ElectionsPage() {
         <h1 className="text-xl font-bold text-gray-900 sm:text-2xl">
           선거 관리
         </h1>
-        <Link href="/admin/elections/new">
+        <a href="/admin/elections/new/">
           <Button
             size="md"
             iconLeft={<Plus className="h-4 w-4" />}
           >
             새 선거 만들기
           </Button>
-        </Link>
+        </a>
       </div>
 
       {/* Search & filter bar */}
@@ -192,14 +191,14 @@ export default function ElectionsPage() {
                 : '새 선거를 만들어 학교 투표를 시작하세요.'}
             </p>
             {!searchQuery.trim() && (
-              <Link href="/admin/elections/new" className="mt-5">
+              <a href="/admin/elections/new/" className="mt-5">
                 <Button
                   size="md"
                   iconLeft={<Plus className="h-4 w-4" />}
                 >
                   새 선거 만들기
                 </Button>
-              </Link>
+              </a>
             )}
           </motion.div>
         )}

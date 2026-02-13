@@ -1,5 +1,7 @@
 import {
   signInWithEmailAndPassword,
+  createUserWithEmailAndPassword,
+  updateProfile,
   signOut as firebaseSignOut,
   onAuthStateChanged,
   type User,
@@ -32,6 +34,35 @@ export async function signInWithEmail(
     };
 
     const message = errorMessages[code] ?? '로그인에 실패했습니다. 다시 시도해주세요.';
+    throw new Error(message);
+  }
+}
+
+/**
+ * Sign up with email and password.
+ * Returns the authenticated User on success.
+ */
+export async function signUpWithEmail(
+  email: string,
+  password: string,
+  displayName: string
+): Promise<User> {
+  try {
+    const credential = await createUserWithEmailAndPassword(auth, email, password);
+    await updateProfile(credential.user, { displayName });
+    return credential.user;
+  } catch (error: unknown) {
+    const firebaseError = error as { code?: string; message?: string };
+    const code = firebaseError.code ?? 'unknown';
+
+    const errorMessages: Record<string, string> = {
+      'auth/email-already-in-use': '이미 사용 중인 이메일입니다.',
+      'auth/invalid-email': '이메일 형식이 올바르지 않습니다.',
+      'auth/operation-not-allowed': '이메일/비밀번호 회원가입이 비활성화되어 있습니다.',
+      'auth/weak-password': '비밀번호가 너무 약합니다. 6자 이상 입력해주세요.',
+    };
+
+    const message = errorMessages[code] ?? '회원가입에 실패했습니다. 다시 시도해주세요.';
     throw new Error(message);
   }
 }

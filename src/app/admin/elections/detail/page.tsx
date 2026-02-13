@@ -3,7 +3,6 @@
 import { Suspense, useState, useCallback, useMemo } from 'react';
 import { useSearchParams, useRouter } from 'next/navigation';
 import { motion } from 'framer-motion';
-import Link from 'next/link';
 import toast from 'react-hot-toast';
 import {
   ChevronLeft,
@@ -369,9 +368,9 @@ function ElectionDetailPageContent() {
           {NAV_TABS.map((tab) => {
             const TabIcon = tab.icon;
             return (
-              <Link
+              <a
                 key={tab.href}
-                href={`/admin/elections/detail/${tab.href}?id=${electionId}`}
+                href={`/admin/elections/detail/${tab.href}/?id=${electionId}`}
                 className={cn(
                   'flex shrink-0 items-center gap-2 border-b-2 px-5 py-3.5 text-sm font-medium transition-colors',
                   'border-transparent text-gray-500 hover:border-gray-300 hover:text-gray-700'
@@ -379,7 +378,7 @@ function ElectionDetailPageContent() {
               >
                 <TabIcon className="h-4 w-4" />
                 {tab.label}
-              </Link>
+              </a>
             );
           })}
         </div>
@@ -477,12 +476,12 @@ function ElectionDetailPageContent() {
               <h3 className="text-base font-semibold text-gray-900">
                 등록된 후보자
               </h3>
-              <Link
-                href={`/admin/elections/detail/candidates?id=${electionId}`}
+              <a
+                href={`/admin/elections/detail/candidates/?id=${electionId}`}
                 className="text-sm text-blue-600 hover:text-blue-700"
               >
                 전체보기
-              </Link>
+              </a>
             </div>
           }
         >
