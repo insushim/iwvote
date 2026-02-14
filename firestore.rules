@@ -1,11 +1,24 @@
 rules_version = '2';
 service cloud.firestore {
   match /databases/{database}/documents {
-    // School info — only authenticated admins
+
+    // Helper: check if the caller is an admin or superadmin
+    function isAdmin() {
+      return request.auth != null &&
+        get(/databases/$(database)/documents/users/$(request.auth.uid)).data.role in ['admin', 'superadmin'];
+    }
+
+    // Helper: check if the caller is a superadmin
+    function isSuperAdmin() {
+      return request.auth != null &&
+        get(/databases/$(database)/documents/users/$(request.auth.uid)).data.role == 'superadmin';
+    }
+
+    // School info — only admins
     match /schools/{schoolId} {
-      allow read: if request.auth != null;
+      allow read: if isAdmin();
       allow create: if request.auth != null;
-      allow update: if request.auth != null;
+      allow update: if isAdmin();
       allow delete: if false;
     }
 
@@ -13,53 +26,59 @@ service cloud.firestore {
     match /elections/{electionId} {
       // Public read: voters need election info on ballot page
       allow read: if true;
-      allow create: if request.auth != null;
-      // Only authenticated admins can update (Cloud Functions use admin SDK)
-      allow update: if request.auth != null;
+      // Only admins can create/update
+      allow create: if isAdmin();
+      allow update: if isAdmin();
       allow delete: if false;
     }
 
     // Votes (top-level collection)
-    // All vote creation now happens via Cloud Functions (admin SDK bypasses rules)
+    // All vote creation happens via Cloud Functions (admin SDK bypasses rules)
     match /votes/{voteId} {
       allow create: if false;
-      allow read: if request.auth != null;
+      allow read: if isAdmin();
       allow update: if false;
-      // Authenticated admins can delete votes (data purge after finalization)
-      allow delete: if request.auth != null;
+      // Only superadmin can delete votes (data purge after finalization)
+      allow delete: if isSuperAdmin();
     }
 
     // Voter codes (top-level collection)
-    // Code lookup and marking as used now happens via Cloud Functions
+    // Code lookup and creation happens via Cloud Functions
     match /voterCodes/{codeId} {
-      // Read restricted to authenticated admins (Cloud Functions use admin SDK for lookups)
-      allow read: if request.auth != null;
-      allow create: if request.auth != null;
+      allow read: if isAdmin();
+      // Only Cloud Functions create codes (admin SDK bypasses rules)
+      allow create: if false;
       allow update: if false;
-      // Authenticated admins can delete codes (data purge after finalization)
-      allow delete: if request.auth != null;
+      // Only superadmin can delete codes (data purge after finalization)
+      allow delete: if isSuperAdmin();
     }
 
     // Hash chain (top-level collection)
-    // All hash chain creation now happens via Cloud Functions
+    // All hash chain creation happens via Cloud Functions
     match /hashChain/{blockId} {
-      // Authenticated read for verification UI
-      allow read: if request.auth != null;
+      allow read: if isAdmin();
       allow create: if false;
       allow update, delete: if false;
     }
 
     // Users
     match /users/{userId} {
+      // Any authenticated user can read (needed for auth context)
       allow read: if request.auth != null;
+      // Users can only create their own profile
       allow create: if request.auth != null && request.auth.uid == userId;
-      allow update: if request.auth != null;
-      allow delete: if request.auth != null;
+      // Users can update their own profile EXCEPT role/approved fields
+      // Admins can update any user
+      allow update: if isAdmin() ||
+        (request.auth != null && request.auth.uid == userId &&
+         !request.resource.data.diff(resource.data).affectedKeys().hasAny(['role', 'approved', 'approvedAt', 'approvedBy']));
+      // Only superadmin can delete users
+      allow delete: if isSuperAdmin();
     }
 
-    // Audit logs — only Cloud Functions create these now
+    // Audit logs — only Cloud Functions create these
     match /auditLogs/{logId} {
-      allow read: if request.auth != null;
+      allow read: if isAdmin();
       allow create: if false;
       allow update, delete: if false;
     }

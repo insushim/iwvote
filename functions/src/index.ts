@@ -85,6 +85,18 @@ function validateCodeFormat(code: string): boolean {
   return true;
 }
 
+// Admin role verification helper
+async function verifyAdmin(uid: string): Promise<void> {
+  const userDoc = await db.collection('users').doc(uid).get();
+  if (!userDoc.exists) {
+    throw new functions.https.HttpsError('permission-denied', '관리자 권한이 없습니다.');
+  }
+  const role = userDoc.data()?.role;
+  if (role !== 'admin' && role !== 'superadmin') {
+    throw new functions.https.HttpsError('permission-denied', '관리자 권한이 없습니다.');
+  }
+}
+
 // Audit log helper
 async function createAuditLog(electionId: string, action: string, actorId: string, details: string) {
   await db.collection(COLLECTIONS.AUDIT_LOGS).add({
@@ -279,6 +291,7 @@ export const getElectionResults = functions.https.onCall(async (data, context) =
   if (!context.auth) {
     throw new functions.https.HttpsError('unauthenticated', '인증이 필요합니다.');
   }
+  await verifyAdmin(context.auth.uid);
 
   const { electionId } = data;
   if (!electionId || typeof electionId !== 'string') {
@@ -433,6 +446,7 @@ export const generateVoterCodes = functions.https.onCall(async (data, context) =
   if (!context.auth) {
     throw new functions.https.HttpsError('unauthenticated', '인증이 필요합니다.');
   }
+  await verifyAdmin(context.auth.uid);
 
   const { electionId, classId, grade, classNum, count } = data;
 
@@ -507,6 +521,7 @@ export const verifyHashChain = functions.https.onCall(async (data, context) => {
   if (!context.auth) {
     throw new functions.https.HttpsError('unauthenticated', '인증이 필요합니다.');
   }
+  await verifyAdmin(context.auth.uid);
 
   const { electionId } = data;
   if (!electionId) {
