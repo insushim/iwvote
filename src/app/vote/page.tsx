@@ -21,12 +21,20 @@ function VoteCodePageContent() {
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [success, setSuccess] = useState(false);
-  const [inputMode, setInputMode] = useState<InputMode>('code');
+  const [inputMode, setInputMode] = useState<InputMode>(() => {
+    // Restore last used mode from localStorage
+    if (typeof window !== 'undefined') {
+      const saved = localStorage.getItem('vote-input-mode');
+      if (saved === 'qr' || saved === 'code') return saved;
+    }
+    return 'code';
+  });
   const qrReaderRef = useRef<HTMLDivElement>(null);
   const scannerRef = useRef<unknown>(null);
 
-  // Check for pre-filled code from QR scan URL
+  // Check for pre-filled code from QR scan URL or mode preference
   const prefilledCode = searchParams.get('code');
+  const modeParam = searchParams.get('mode');
 
   const validateAndNavigate = useCallback(
     async (code: string) => {
@@ -87,6 +95,13 @@ function VoteCodePageContent() {
       validateAndNavigate(prefilledCode);
     }
   }, [prefilledCode, validateAndNavigate]);
+
+  // Apply mode from URL parameter
+  useEffect(() => {
+    if (modeParam === 'qr' || modeParam === 'code') {
+      setInputMode(modeParam);
+    }
+  }, [modeParam]);
 
   const handleCodeComplete = useCallback(
     async (code: string) => {
@@ -168,6 +183,8 @@ function VoteCodePageContent() {
     }
     setInputMode(mode);
     setError(null);
+    // Save preference for next student
+    try { localStorage.setItem('vote-input-mode', mode); } catch { /* ignore */ }
   }, []);
 
   return (

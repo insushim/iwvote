@@ -49,10 +49,19 @@ interface StatusAction {
 const STATUS_ACTIONS: Partial<Record<ElectionStatus, StatusAction[]>> = {
   draft: [
     {
+      targetStatus: 'active',
+      label: '투표 시작',
+      icon: Play,
+      variant: 'primary',
+      confirmTitle: '투표 바로 시작',
+      confirmMessage:
+        '준비 단계를 건너뛰고 바로 투표를 시작하시겠습니까? 유권자들이 즉시 투표할 수 있게 됩니다.',
+    },
+    {
       targetStatus: 'ready',
       label: '준비 완료',
       icon: CheckCircle2,
-      variant: 'primary',
+      variant: 'secondary',
       confirmTitle: '준비 완료 상태로 변경',
       confirmMessage:
         '선거를 준비 완료 상태로 변경하시겠습니까? 준비 완료 후에는 후보자 수정이 제한됩니다.',
