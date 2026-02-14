@@ -637,6 +637,62 @@ export async function getAuditLogs(
   return snapshot.docs.map((d) => ({ id: d.id, ...d.data() }) as AuditLog);
 }
 
+// ============================================================
+// Data Purge (PIPA Compliance — 개인정보보호법 제21조)
+// ============================================================
+
+/**
+ * Purge personal data for a finalized election.
+ * Deletes voter codes and votes, keeping only anonymized hash chain and audit logs.
+ * Must only be called on finalized elections.
+ */
+export async function purgeElectionData(electionId: string): Promise<{ deletedVotes: number; deletedCodes: number }> {
+  // Verify election is finalized
+  const election = await getElection(electionId);
+  if (!election) throw new Error('선거를 찾을 수 없습니다.');
+  if (election.status !== 'finalized') {
+    throw new Error('결과가 확정된 선거만 데이터를 파기할 수 있습니다.');
+  }
+
+  let deletedVotes = 0;
+  let deletedCodes = 0;
+
+  // Delete all voter codes for this election
+  const codesQuery = query(
+    collection(db, COLLECTIONS.VOTER_CODES),
+    where('electionId', '==', electionId)
+  );
+  const codesSnap = await getDocs(codesQuery);
+  for (const d of codesSnap.docs) {
+    await deleteDoc(doc(db, COLLECTIONS.VOTER_CODES, d.id));
+    deletedCodes++;
+  }
+
+  // Delete all votes for this election
+  const votesQuery = query(
+    collection(db, COLLECTIONS.VOTES),
+    where('electionId', '==', electionId)
+  );
+  const votesSnap = await getDocs(votesQuery);
+  for (const d of votesSnap.docs) {
+    await deleteDoc(doc(db, COLLECTIONS.VOTES, d.id));
+    deletedVotes++;
+  }
+
+  // Clear candidate photos from election doc (data URLs)
+  const candidatesWithoutPhotos = election.candidates.map((c) => ({
+    ...c,
+    photoURL: '',
+  }));
+  await updateElection(electionId, {
+    candidates: candidatesWithoutPhotos,
+    totalVoters: 0,
+    totalVoted: 0,
+  });
+
+  return { deletedVotes, deletedCodes };
+}
+
 /**
  * Get a count of votes cast today for a given school.
  * Note: This is approximate — it counts votes across all elections for the school.

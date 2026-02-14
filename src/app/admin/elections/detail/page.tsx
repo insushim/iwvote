@@ -27,7 +27,7 @@ import { Modal } from '@/components/ui/Modal';
 import { Spinner } from '@/components/ui/Spinner';
 import { ProgressBar } from '@/components/ui/ProgressBar';
 import { useElection } from '@/hooks/useElection';
-import { updateElectionStatus } from '@/lib/firestore';
+import { updateElectionStatus, purgeElectionData } from '@/lib/firestore';
 import { cn } from '@/lib/utils';
 import {
   ELECTION_STATUS_LABELS,
@@ -167,6 +167,8 @@ function ElectionDetailPageContent() {
 
   const [confirmAction, setConfirmAction] = useState<StatusAction | null>(null);
   const [transitioning, setTransitioning] = useState(false);
+  const [showPurgeModal, setShowPurgeModal] = useState(false);
+  const [purging, setPurging] = useState(false);
 
   // Vote rate calculation
   const voteRate = useMemo(() => {
@@ -195,6 +197,24 @@ function ElectionDetailPageContent() {
     },
     [election]
   );
+
+  // Handle data purge (PIPA compliance)
+  const handlePurge = useCallback(async () => {
+    if (!election) return;
+    setPurging(true);
+    try {
+      const result = await purgeElectionData(election.id);
+      toast.success(
+        `데이터 파기 완료: 투표 ${result.deletedVotes}건, 코드 ${result.deletedCodes}건 삭제`
+      );
+      setShowPurgeModal(false);
+    } catch (err) {
+      const message = err instanceof Error ? err.message : '데이터 파기에 실패했습니다.';
+      toast.error(message);
+    } finally {
+      setPurging(false);
+    }
+  }, [election]);
 
   // Loading state
   if (loading) {
@@ -529,6 +549,72 @@ function ElectionDetailPageContent() {
           </div>
         </Card>
       )}
+
+      {/* Data Purge Section (finalized elections only) */}
+      {isFinalized && (
+        <Card padding="lg" className="mt-6 border-red-200 bg-red-50">
+          <div className="flex items-start justify-between gap-4">
+            <div>
+              <h3 className="text-sm font-semibold text-red-800">
+                개인정보 파기 (개인정보보호법 제21조)
+              </h3>
+              <p className="mt-1 text-xs text-red-600">
+                선거 결과 확정 후 개인정보(투표 코드, 투표 기록, 후보자 사진)를 파기합니다.
+                해시 체인과 감사 로그는 보존됩니다. 이 작업은 되돌릴 수 없습니다.
+              </p>
+            </div>
+            <Button
+              variant="danger"
+              size="sm"
+              onClick={() => setShowPurgeModal(true)}
+            >
+              데이터 파기
+            </Button>
+          </div>
+        </Card>
+      )}
+
+      {/* Data Purge Confirmation Modal */}
+      <Modal
+        isOpen={showPurgeModal}
+        onClose={() => !purging && setShowPurgeModal(false)}
+        title="개인정보 파기 확인"
+        size="sm"
+        footer={
+          <>
+            <Button
+              variant="outline"
+              size="md"
+              onClick={() => setShowPurgeModal(false)}
+              disabled={purging}
+            >
+              취소
+            </Button>
+            <Button
+              variant="danger"
+              size="md"
+              loading={purging}
+              onClick={handlePurge}
+            >
+              파기 실행
+            </Button>
+          </>
+        }
+      >
+        <div className="space-y-3">
+          <p className="text-sm text-gray-600">
+            다음 데이터가 영구적으로 삭제됩니다:
+          </p>
+          <ul className="list-disc space-y-1 pl-5 text-sm text-gray-600">
+            <li>모든 투표 코드</li>
+            <li>모든 투표 기록</li>
+            <li>후보자 사진</li>
+          </ul>
+          <p className="text-sm font-medium text-red-600">
+            이 작업은 되돌릴 수 없습니다.
+          </p>
+        </div>
+      </Modal>
 
       {/* Confirmation Modal */}
       <Modal

@@ -7,11 +7,12 @@ import { ArrowLeft, KeyRound, QrCode, Keyboard } from 'lucide-react';
 import toast from 'react-hot-toast';
 
 import { Suspense } from 'react';
+import { httpsCallable } from 'firebase/functions';
 import { CodeInput } from '@/components/vote/CodeInput';
 import { Spinner } from '@/components/ui/Spinner';
 import { VOTE_CODE_LENGTH } from '@/constants';
-import { hashVoteCode, validateCodeFormat } from '@/lib/voteCode';
-import { getVoterCodeByHash } from '@/lib/firestore';
+import { validateCodeFormat } from '@/lib/voteCode';
+import { functions } from '@/lib/firebase';
 
 type InputMode = 'code' | 'qr';
 
@@ -52,35 +53,20 @@ function VoteCodePageContent() {
       setError(null);
 
       try {
-        const codeHash = hashVoteCode(normalizedCode);
-        const voterCode = await getVoterCodeByHash(codeHash);
-
-        if (!voterCode) {
-          const msg = '투표 코드가 올바르지 않아요. 다시 확인해주세요.';
-          setError(msg);
-          toast.error(msg);
-          setLoading(false);
-          return;
-        }
-
-        if (voterCode.used) {
-          const msg = '이미 사용된 투표 코드예요. 하나의 코드로 한 번만 투표할 수 있어요.';
-          setError(msg);
-          toast.error(msg);
-          setLoading(false);
-          return;
-        }
+        const validateCodeFn = httpsCallable<{ code: string }, { valid: boolean; electionId: string }>(functions, 'validateCode');
+        const result = await validateCodeFn({ code: normalizedCode });
+        const { electionId } = result.data;
 
         setSuccess(true);
         toast.success('투표 코드가 확인되었어요!');
 
         setTimeout(() => {
           router.push(
-            `/vote/ballot?code=${encodeURIComponent(normalizedCode)}&electionId=${encodeURIComponent(voterCode.electionId)}`
+            `/vote/ballot?code=${encodeURIComponent(normalizedCode)}&electionId=${encodeURIComponent(electionId)}`
           );
         }, 800);
-      } catch {
-        const msg = '코드 확인 중 오류가 발생했어요. 잠시 후 다시 시도해주세요.';
+      } catch (err) {
+        const msg = err instanceof Error ? err.message : '코드 확인 중 오류가 발생했어요. 잠시 후 다시 시도해주세요.';
         setError(msg);
         toast.error(msg);
         setLoading(false);
@@ -328,6 +314,15 @@ function VoteCodePageContent() {
               종이를 잃어버렸다면 선생님께 말씀해주세요.
             </p>
           </motion.div>
+
+          <div className="mt-6 text-center">
+            <a
+              href="/privacy/"
+              className="text-xs text-gray-400 underline hover:text-gray-600"
+            >
+              개인정보처리방침
+            </a>
+          </div>
         </motion.div>
       </main>
     </div>

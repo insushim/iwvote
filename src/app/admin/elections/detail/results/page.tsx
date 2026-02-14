@@ -22,6 +22,7 @@ import {
   ResponsiveContainer,
   Cell,
 } from 'recharts';
+import { httpsCallable } from 'firebase/functions';
 import { Button } from '@/components/ui/Button';
 import { Card } from '@/components/ui/Card';
 import { Badge } from '@/components/ui/Badge';
@@ -31,9 +32,10 @@ import { ResultChart } from '@/components/admin/ResultChart';
 import { ClassResultTable } from '@/components/admin/ClassResultTable';
 import { useElection } from '@/hooks/useElection';
 import { useHashChain } from '@/hooks/useHashChain';
-import { updateElection, getVotesByElection } from '@/lib/firestore';
+import { updateElection } from '@/lib/firestore';
+import { functions } from '@/lib/firebase';
 import { CHART_COLORS } from '@/constants';
-import type { ElectionResult, CandidateResult } from '@/types';
+import type { ElectionResult } from '@/types';
 
 function ResultsPageContent() {
   const searchParams = useSearchParams();
@@ -51,86 +53,22 @@ function ResultsPageContent() {
   const [showFinalizeModal, setShowFinalizeModal] = useState(false);
   const [finalizing, setFinalizing] = useState(false);
 
-  // Compute results from votes
+  // Fetch results from Cloud Function (decryption happens server-side)
   const computeResults = useCallback(async () => {
     if (!election) return;
     setResultsLoading(true);
 
     try {
-      const votes = await getVotesByElection(electionId);
-
-      // Count votes per candidate
-      const candidateCounts: Record<string, { total: number; classCounts: Record<string, number> }> = {};
-      election.candidates.forEach((c) => {
-        candidateCounts[c.id] = { total: 0, classCounts: {} };
-      });
-
-      let abstentions = 0;
-
-      votes.forEach((vote) => {
-        if (vote.candidateId === 'abstain' || vote.candidateId === '') {
-          abstentions++;
-          return;
-        }
-        if (candidateCounts[vote.candidateId]) {
-          candidateCounts[vote.candidateId].total++;
-          const classId = vote.classId;
-          candidateCounts[vote.candidateId].classCounts[classId] =
-            (candidateCounts[vote.candidateId].classCounts[classId] ?? 0) + 1;
-        }
-      });
-
-      const totalVotes = votes.length;
-      const totalVoters = election.totalVoters;
-      const turnout = totalVoters > 0 ? (totalVotes / totalVoters) * 100 : 0;
-
-      const validVotes = totalVotes - abstentions;
-
-      const candidateResults: CandidateResult[] = election.candidates.map((c) => {
-        const count = candidateCounts[c.id];
-        return {
-          candidateId: c.id,
-          candidateName: c.name,
-          candidateNumber: c.number,
-          totalVotes: count.total,
-          percentage: validVotes > 0 ? (count.total / validVotes) * 100 : 0,
-          classCounts: count.classCounts,
-        };
-      });
-
-      // Compute class turnout
-      const classTurnout: Record<string, { voted: number; total: number; rate: number }> = {};
-
-      // Count votes per class
-      const votesByClass: Record<string, number> = {};
-      votes.forEach((v) => {
-        votesByClass[v.classId] = (votesByClass[v.classId] ?? 0) + 1;
-      });
-
-      election.targetClasses.forEach((classId) => {
-        const voted = votesByClass[classId] ?? 0;
-        // We don't have per-class total from election object directly;
-        // approximate using totalVoters / targetClasses count, or use real data
-        const total = Math.round(totalVoters / election.targetClasses.length);
-        classTurnout[classId] = {
-          voted,
-          total,
-          rate: total > 0 ? (voted / total) * 100 : 0,
-        };
-      });
-
-      setResults({
-        electionId,
-        totalVotes,
-        totalVoters,
-        turnout,
-        candidates: candidateResults,
-        abstentions,
-        classTurnout,
-      });
+      const getResultsFn = httpsCallable<{ electionId: string }, ElectionResult>(
+        functions,
+        'getElectionResults'
+      );
+      const result = await getResultsFn({ electionId });
+      setResults(result.data);
     } catch (err) {
-      console.error('Failed to compute results:', err);
-      toast.error('결과를 계산하는데 실패했습니다.');
+      console.error('Failed to fetch results:', err);
+      const message = err instanceof Error ? err.message : '결과를 불러오는데 실패했습니다.';
+      toast.error(message);
     } finally {
       setResultsLoading(false);
     }

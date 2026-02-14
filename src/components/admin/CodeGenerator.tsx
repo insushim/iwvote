@@ -4,12 +4,12 @@ import { useState } from 'react';
 import { motion } from 'framer-motion';
 import { Loader2, CheckCircle2, XCircle, Zap } from 'lucide-react';
 import toast from 'react-hot-toast';
+import { httpsCallable } from 'firebase/functions';
 import { Button } from '@/components/ui/Button';
 import { Card } from '@/components/ui/Card';
 import { Badge } from '@/components/ui/Badge';
 import { classIdToLabel } from '@/lib/utils';
-import { generateVoteCode, hashVoteCode } from '@/lib/voteCode';
-import { createVoterCodes } from '@/lib/firestore';
+import { functions } from '@/lib/firebase';
 
 interface ClassConfig {
   classId: string;
@@ -55,33 +55,20 @@ export function CodeGenerator({ electionId, classes, onCodesGenerated }: CodeGen
       const grade = parseInt(parts[0], 10);
       const classNum = parseInt(parts[1], 10);
 
-      // Generate codes client-side
-      const codesToCreate = [];
-      for (let i = 0; i < count; i++) {
-        const plainCode = generateVoteCode();
-        const codeHash = hashVoteCode(plainCode);
-        codesToCreate.push({
-          code: plainCode,
-          codeHash,
-          electionId,
-          classId,
-          grade,
-          classNum,
-          studentNumber: i + 1,
-          used: false,
-          usedAt: null,
-        });
-      }
+      // Generate codes server-side via Cloud Function
+      const generateCodesFn = httpsCallable<
+        { electionId: string; classId: string; grade: number; classNum: number; count: number },
+        { codes: { code: string; studentNumber: number }[] }
+      >(functions, 'generateVoterCodes');
 
-      // Save to Firestore directly
-      await createVoterCodes(codesToCreate);
+      const result = await generateCodesFn({ electionId, classId, grade, classNum, count });
 
       setStatuses((prev) => ({
         ...prev,
-        [classId]: { ...prev[classId], status: 'done', generated: codesToCreate.length },
+        [classId]: { ...prev[classId], status: 'done', generated: result.data.codes.length },
       }));
 
-      toast.success(`${classIdToLabel(classId)} 코드 ${codesToCreate.length}개 생성 완료`);
+      toast.success(`${classIdToLabel(classId)} 코드 ${result.data.codes.length}개 생성 완료`);
     } catch (err) {
       const message = err instanceof Error ? err.message : '알 수 없는 오류';
       setStatuses((prev) => ({

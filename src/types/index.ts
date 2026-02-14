@@ -61,7 +61,7 @@ export interface Election {
 export interface Vote {
   id: string;
   electionId: string;
-  candidateId: string;
+  candidateId?: string; // deprecated: no longer stored in new votes for vote secrecy
   encryptedVote: string;
   voteHash: string;
   previousHash: string;

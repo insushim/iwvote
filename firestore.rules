@@ -1,7 +1,7 @@
 rules_version = '2';
 service cloud.firestore {
   match /databases/{database}/documents {
-    // School info
+    // School info — only authenticated admins
     match /schools/{schoolId} {
       allow read: if request.auth != null;
       allow create: if request.auth != null;
@@ -11,33 +11,41 @@ service cloud.firestore {
 
     // Elections
     match /elections/{electionId} {
+      // Public read: voters need election info on ballot page
       allow read: if true;
       allow create: if request.auth != null;
-      // Allow admin full update; allow unauthenticated voters to update only vote counters
-      allow update: if request.auth != null
-        || request.resource.data.diff(resource.data).affectedKeys().hasOnly(['totalVoted', 'hashChainHead', 'updatedAt']);
+      // Only authenticated admins can update (Cloud Functions use admin SDK)
+      allow update: if request.auth != null;
       allow delete: if false;
     }
 
     // Votes (top-level collection)
+    // All vote creation now happens via Cloud Functions (admin SDK bypasses rules)
     match /votes/{voteId} {
-      allow create: if true;
+      allow create: if false;
       allow read: if request.auth != null;
-      allow update, delete: if false;
+      allow update: if false;
+      // Authenticated admins can delete votes (data purge after finalization)
+      allow delete: if request.auth != null;
     }
 
     // Voter codes (top-level collection)
+    // Code lookup and marking as used now happens via Cloud Functions
     match /voterCodes/{codeId} {
-      allow read: if true;
+      // Read restricted to authenticated admins (Cloud Functions use admin SDK for lookups)
+      allow read: if request.auth != null;
       allow create: if request.auth != null;
-      allow update: if true;
-      allow delete: if false;
+      allow update: if false;
+      // Authenticated admins can delete codes (data purge after finalization)
+      allow delete: if request.auth != null;
     }
 
     // Hash chain (top-level collection)
+    // All hash chain creation now happens via Cloud Functions
     match /hashChain/{blockId} {
-      allow read: if true;
-      allow create: if true;
+      // Authenticated read for verification UI
+      allow read: if request.auth != null;
+      allow create: if false;
       allow update, delete: if false;
     }
 
@@ -49,10 +57,10 @@ service cloud.firestore {
       allow delete: if request.auth != null;
     }
 
-    // Audit logs
+    // Audit logs — only Cloud Functions create these now
     match /auditLogs/{logId} {
       allow read: if request.auth != null;
-      allow create: if true;
+      allow create: if false;
       allow update, delete: if false;
     }
   }
