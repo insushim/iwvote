@@ -14,28 +14,34 @@ import type { VoteReceipt as VoteReceiptType } from '@/types';
 /* Confetti particle component */
 function ConfettiParticle({ delay, x }: { delay: number; x: number }) {
   const colors = ['#3B82F6', '#22C55E', '#F59E0B', '#EC4899', '#8B5CF6'];
-  const color = colors[Math.floor(Math.random() * colors.length)];
-  const size = 6 + Math.random() * 6;
+  const [style] = useState(() => ({
+    color: colors[Math.floor(Math.random() * colors.length)],
+    size: 6 + Math.random() * 6,
+    yEnd: 400 + Math.random() * 300,
+    xEnd: (Math.random() - 0.5) * 150,
+    rotate: Math.random() * 720 - 360,
+    duration: 2.5 + Math.random() * 1.5,
+  }));
 
   return (
     <motion.div
       className="pointer-events-none absolute rounded-sm"
       style={{
-        width: size,
-        height: size,
-        backgroundColor: color,
+        width: style.size,
+        height: style.size,
+        backgroundColor: style.color,
         left: `${x}%`,
         top: -10,
       }}
       initial={{ opacity: 1, y: 0, rotate: 0 }}
       animate={{
         opacity: [1, 1, 0],
-        y: [0, 400 + Math.random() * 300],
-        x: [0, (Math.random() - 0.5) * 150],
-        rotate: [0, Math.random() * 720 - 360],
+        y: [0, style.yEnd],
+        x: [0, style.xEnd],
+        rotate: [0, style.rotate],
       }}
       transition={{
-        duration: 2.5 + Math.random() * 1.5,
+        duration: style.duration,
         delay: delay,
         ease: 'easeOut',
       }}

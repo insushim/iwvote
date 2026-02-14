@@ -9,24 +9,21 @@ import {
   where,
   orderBy,
   limit,
-  runTransaction,
   serverTimestamp,
   Timestamp,
-  type DocumentData,
+  setDoc,
+  deleteDoc,
   type QueryConstraint,
 } from 'firebase/firestore';
 import { db } from '@/lib/firebase';
 import { COLLECTIONS } from '@/constants';
-import { setDoc, deleteDoc } from 'firebase/firestore';
 import type {
   School,
   Election,
   ElectionStatus,
-  Vote,
   VoterCode,
   HashBlock,
   AuditLog,
-  AuditAction,
   UserProfile,
   UserRole,
 } from '@/types';
@@ -336,129 +333,8 @@ export async function removeCandidate(
 }
 
 // ============================================================
-// Votes
-// ============================================================
-
-/**
- * Cast a vote using a Firestore transaction to ensure atomicity.
- * This function:
- * 1. Verifies the election is active
- * 2. Marks the voter code as used
- * 3. Creates the vote document
- * 4. Increments the election's totalVoted counter
- *
- * @returns The created vote document ID.
- */
-export async function castVote(
-  electionId: string,
-  codeDocId: string,
-  voteData: Omit<Vote, 'id' | 'timestamp'>
-): Promise<string> {
-  const voteId = await runTransaction(db, async (transaction) => {
-    // 1. Read the election and verify it is active
-    const electionRef = doc(db, COLLECTIONS.ELECTIONS, electionId);
-    const electionSnap = await transaction.get(electionRef);
-
-    if (!electionSnap.exists()) {
-      throw new Error('선거를 찾을 수 없습니다.');
-    }
-
-    const electionData = electionSnap.data();
-    if (electionData.status !== 'active') {
-      throw new Error('현재 투표가 진행중이지 않습니다.');
-    }
-
-    // 2. Read the voter code and verify it hasn't been used
-    const codeRef = doc(db, COLLECTIONS.VOTER_CODES, codeDocId);
-    const codeSnap = await transaction.get(codeRef);
-
-    if (!codeSnap.exists()) {
-      throw new Error('유효하지 않은 투표 코드입니다.');
-    }
-
-    const codeData = codeSnap.data();
-    if (codeData.used) {
-      throw new Error('이미 사용된 투표 코드입니다.');
-    }
-
-    // 3. Create the vote document
-    const voteRef = doc(collection(db, COLLECTIONS.VOTES));
-    transaction.set(voteRef, {
-      ...voteData,
-      timestamp: serverTimestamp(),
-    });
-
-    // 4. Mark the voter code as used
-    transaction.update(codeRef, {
-      used: true,
-      usedAt: serverTimestamp(),
-    });
-
-    // 5. Increment the election's voted counter
-    transaction.update(electionRef, {
-      totalVoted: (electionData.totalVoted ?? 0) + 1,
-      updatedAt: serverTimestamp(),
-    });
-
-    return voteRef.id;
-  });
-
-  return voteId;
-}
-
-/**
- * Get all votes for an election, ordered by timestamp ascending.
- */
-export async function getVotesByElection(electionId: string): Promise<Vote[]> {
-  const q = query(
-    collection(db, COLLECTIONS.VOTES),
-    where('electionId', '==', electionId),
-    orderBy('timestamp', 'asc')
-  );
-  const snapshot = await getDocs(q);
-  return snapshot.docs.map((d) => ({ id: d.id, ...d.data() }) as Vote);
-}
-
-/**
- * Get all votes for a specific class in an election.
- */
-export async function getVotesByClass(
-  electionId: string,
-  classId: string
-): Promise<Vote[]> {
-  const q = query(
-    collection(db, COLLECTIONS.VOTES),
-    where('electionId', '==', electionId),
-    where('classId', '==', classId),
-    orderBy('timestamp', 'asc')
-  );
-  const snapshot = await getDocs(q);
-  return snapshot.docs.map((d) => ({ id: d.id, ...d.data() }) as Vote);
-}
-
-// ============================================================
 // Voter Codes
 // ============================================================
-
-/**
- * Create multiple voter codes in batch.
- * Each code object should include the hashed code for secure storage.
- */
-export async function createVoterCodes(
-  codes: Omit<VoterCode, 'id' | 'createdAt'>[]
-): Promise<string[]> {
-  const ids: string[] = [];
-
-  for (const code of codes) {
-    const docRef = await addDoc(collection(db, COLLECTIONS.VOTER_CODES), {
-      ...code,
-      createdAt: serverTimestamp(),
-    });
-    ids.push(docRef.id);
-  }
-
-  return ids;
-}
 
 /**
  * Get all voter codes for a specific class.
@@ -521,50 +397,9 @@ export async function getVoterCodeStats(
   return stats;
 }
 
-/**
- * Find a voter code document by its HMAC hash.
- * Used to look up a code during vote submission without storing plaintext.
- */
-export async function getVoterCodeByHash(codeHash: string): Promise<VoterCode | null> {
-  const q = query(
-    collection(db, COLLECTIONS.VOTER_CODES),
-    where('codeHash', '==', codeHash),
-    limit(1)
-  );
-  const snapshot = await getDocs(q);
-
-  if (snapshot.empty) return null;
-  const d = snapshot.docs[0];
-  return { id: d.id, ...d.data() } as VoterCode;
-}
-
-/**
- * Mark a voter code as used with a timestamp.
- */
-export async function markCodeAsUsed(codeDocId: string): Promise<void> {
-  const docRef = doc(db, COLLECTIONS.VOTER_CODES, codeDocId);
-  await updateDoc(docRef, {
-    used: true,
-    usedAt: serverTimestamp(),
-  });
-}
-
 // ============================================================
 // Hash Chain
 // ============================================================
-
-/**
- * Add a new block to the hash chain.
- */
-export async function addBlock(
-  block: Omit<HashBlock, 'id' | 'timestamp'>
-): Promise<string> {
-  const docRef = await addDoc(collection(db, COLLECTIONS.HASH_CHAIN), {
-    ...block,
-    timestamp: serverTimestamp(),
-  });
-  return docRef.id;
-}
 
 /**
  * Get the full hash chain for an election, ordered by block index ascending.
@@ -599,19 +434,6 @@ export async function getLatestBlock(electionId: string): Promise<HashBlock | nu
 // ============================================================
 // Audit Logs
 // ============================================================
-
-/**
- * Create a new audit log entry.
- */
-export async function createAuditLog(
-  data: Omit<AuditLog, 'id' | 'timestamp'>
-): Promise<string> {
-  const docRef = await addDoc(collection(db, COLLECTIONS.AUDIT_LOGS), {
-    ...data,
-    timestamp: serverTimestamp(),
-  });
-  return docRef.id;
-}
 
 /**
  * Get audit logs for an election (or all if electionId omitted), ordered by timestamp descending.

@@ -1,6 +1,6 @@
 'use client';
 
-import { Suspense, useState, useEffect, useCallback, useMemo } from 'react';
+import { Suspense, useState, useEffect, useMemo } from 'react';
 import { useSearchParams } from 'next/navigation';
 import toast from 'react-hot-toast';
 import {
@@ -54,32 +54,37 @@ function ResultsPageContent() {
   const [finalizing, setFinalizing] = useState(false);
 
   // Fetch results from Cloud Function (decryption happens server-side)
-  const computeResults = useCallback(async () => {
-    if (!election) return;
+  useEffect(() => {
+    if (!election || !electionId) return;
+
+    let cancelled = false;
     setResultsLoading(true);
 
-    try {
-      const getResultsFn = httpsCallable<{ electionId: string }, ElectionResult>(
-        functions,
-        'getElectionResults'
-      );
-      const result = await getResultsFn({ electionId });
-      setResults(result.data);
-    } catch (err) {
-      console.error('Failed to fetch results:', err);
-      const message = err instanceof Error ? err.message : '결과를 불러오는데 실패했습니다.';
-      toast.error(message);
-    } finally {
-      setResultsLoading(false);
-    }
-  }, [election, electionId]);
+    const fetchResults = async () => {
+      try {
+        const getResultsFn = httpsCallable<{ electionId: string }, ElectionResult>(
+          functions,
+          'getElectionResults'
+        );
+        const result = await getResultsFn({ electionId });
+        if (!cancelled) setResults(result.data);
+      } catch (err) {
+        console.error('Failed to fetch results:', err);
+        if (!cancelled) {
+          const message = err instanceof Error ? err.message : '결과를 불러오는데 실패했습니다.';
+          toast.error(message);
+        }
+      } finally {
+        if (!cancelled) setResultsLoading(false);
+      }
+    };
 
-  useEffect(() => {
-    if (election) {
-      computeResults();
-      fetchBlocks();
-    }
-  }, [election, computeResults, fetchBlocks]);
+    fetchResults();
+    fetchBlocks();
+
+    return () => { cancelled = true; };
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [electionId]);
 
   const handleFinalize = async () => {
     setFinalizing(true);

@@ -193,6 +193,11 @@ export const castVote = functions.https.onCall(async (data) => {
       throw new functions.https.HttpsError('already-exists', '이미 사용된 투표 코드입니다.');
     }
 
+    // Verify voter code belongs to this election
+    if (freshVoterCodeData.electionId !== electionId) {
+      throw new functions.https.HttpsError('permission-denied', '이 투표 코드는 해당 선거에 속하지 않습니다.');
+    }
+
     // Re-read election
     const electionRef = db.collection(COLLECTIONS.ELECTIONS).doc(electionId);
     const electionSnap = await transaction.get(electionRef);
@@ -202,6 +207,13 @@ export const castVote = functions.https.onCall(async (data) => {
     const election = electionSnap.data()!;
     if (election.status !== 'active') {
       throw new functions.https.HttpsError('failed-precondition', '현재 투표가 진행 중이 아닙니다.');
+    }
+
+    // Validate candidateId against election's candidate list
+    const isAbstention = candidateId === '__abstention__';
+    const isValidCandidate = election.candidates.some((c: { id: string }) => c.id === candidateId);
+    if (!isAbstention && !isValidCandidate) {
+      throw new functions.https.HttpsError('invalid-argument', '유효하지 않은 후보자입니다.');
     }
 
     // Encrypt the candidateId server-side
