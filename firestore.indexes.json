@@ -75,6 +75,14 @@
       ]
     },
     {
+      "collectionGroup": "voterCodes",
+      "queryScope": "COLLECTION",
+      "fields": [
+        { "fieldPath": "electionId", "order": "ASCENDING" },
+        { "fieldPath": "classId", "order": "ASCENDING" }
+      ]
+    },
+    {
       "collectionGroup": "votes",
       "queryScope": "COLLECTION",
       "fields": [

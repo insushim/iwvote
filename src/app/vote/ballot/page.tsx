@@ -13,7 +13,6 @@ import {
   getDocs,
   query,
   where,
-  orderBy,
   limit,
   runTransaction,
   Timestamp,
@@ -26,7 +25,7 @@ import { hashVoteCode } from '@/lib/voteCode';
 import { BallotPaper } from '@/components/vote/BallotPaper';
 import { VoteConfirm } from '@/components/vote/VoteConfirm';
 import { Spinner } from '@/components/ui/Spinner';
-import type { Election, VoterCode, HashBlock, VoteReceipt } from '@/types';
+import type { Election, VoterCode, VoteReceipt } from '@/types';
 
 const ABSTENTION_ID = '__abstention__';
 
@@ -125,46 +124,10 @@ function BallotContent() {
         return;
       }
 
-      // 2. Encrypt the candidateId
-      const encryptedVote = encryptVote(selectedCandidateId);
+      // 2. Use Firestore transaction to atomically cast vote, mark code, and add hash chain block
+      // Hash chain state is read from election doc inside the transaction to prevent race conditions
+      let receiptData: VoteReceipt | null = null;
 
-      // 3. Get the latest hash chain block to compute hashes
-      const chainQuery = query(
-        collection(db, COLLECTIONS.HASH_CHAIN),
-        where('electionId', '==', electionId),
-        orderBy('index', 'desc'),
-        limit(1)
-      );
-      const latestBlockSnap = await getDocs(chainQuery);
-
-      let previousBlockHash: string;
-      let newBlockIndex: number;
-
-      if (latestBlockSnap.empty) {
-        previousBlockHash = HASH_CHAIN_GENESIS;
-        newBlockIndex = 0;
-      } else {
-        const latestBlock = latestBlockSnap.docs[0].data() as HashBlock;
-        previousBlockHash = latestBlock.blockHash;
-        newBlockIndex = latestBlock.index + 1;
-      }
-
-      // 4. Compute vote hash and block hash
-      const timestamp = Date.now();
-      const voteHash = computeVoteHash(
-        encryptedVote,
-        timestamp,
-        previousBlockHash
-      );
-      const blockHash = computeBlockHash(
-        newBlockIndex,
-        timestamp,
-        voteHash,
-        previousBlockHash
-      );
-      const firestoreTimestamp = Timestamp.fromMillis(timestamp);
-
-      // 5. Use Firestore transaction to atomically cast vote, mark code, and add block
       await runTransaction(db, async (transaction) => {
         // Re-read voter code inside transaction to prevent race conditions
         const voterCodeRef = doc(db, COLLECTIONS.VOTER_CODES, voterCode.id);
@@ -179,7 +142,7 @@ function BallotContent() {
           throw new Error('이미 사용된 투표 코드입니다.');
         }
 
-        // Re-read election to verify still active
+        // Re-read election to verify still active and get hash chain state
         const electionRef = doc(db, COLLECTIONS.ELECTIONS, electionId);
         const freshElectionSnap = await transaction.get(electionRef);
         if (!freshElectionSnap.exists()) {
@@ -189,6 +152,17 @@ function BallotContent() {
         if (freshElection.status !== 'active') {
           throw new Error('현재 투표가 진행 중이 아닙니다.');
         }
+
+        // Determine hash chain state from election doc (transactionally consistent)
+        const previousBlockHash = freshElection.hashChainHead || HASH_CHAIN_GENESIS;
+        const newBlockIndex = freshElection.totalVoted ?? 0;
+
+        // Compute hashes inside transaction for consistency
+        const encryptedVote = encryptVote(selectedCandidateId);
+        const timestamp = Date.now();
+        const voteHash = computeVoteHash(encryptedVote, timestamp, previousBlockHash);
+        const blockHash = computeBlockHash(newBlockIndex, timestamp, voteHash, previousBlockHash);
+        const firestoreTimestamp = Timestamp.fromMillis(timestamp);
 
         // Create vote document
         const voteRef = doc(collection(db, COLLECTIONS.VOTES));
@@ -227,14 +201,17 @@ function BallotContent() {
           hashChainHead: blockHash,
           updatedAt: firestoreTimestamp,
         });
+
+        // Save receipt data for post-transaction use
+        receiptData = {
+          voteHash,
+          timestamp,
+          blockIndex: newBlockIndex,
+        };
       });
 
-      // 6. Build receipt and navigate to completion page
-      const receipt: VoteReceipt = {
-        voteHash,
-        timestamp,
-        blockIndex: newBlockIndex,
-      };
+      // 3. Build receipt and navigate to completion page
+      const receipt: VoteReceipt = receiptData!;
 
       toast.success('투표가 완료되었어요!');
 

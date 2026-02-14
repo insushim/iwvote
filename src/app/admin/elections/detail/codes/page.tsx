@@ -53,7 +53,8 @@ function CodesPageContent() {
       const q = query(
         collection(db, COLLECTIONS.VOTER_CODES),
         where('electionId', '==', electionId),
-        orderBy('classId', 'asc')
+        orderBy('classId', 'asc'),
+        orderBy('studentNumber', 'asc')
       );
 
       const snap = await getDocs(q);
