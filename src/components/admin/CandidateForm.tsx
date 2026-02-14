@@ -3,8 +3,7 @@
 import { useState, useCallback, useRef } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
 import { Plus, Trash2, GripVertical, Image, AlertCircle, Loader2, Upload, X } from 'lucide-react';
-import { ref, uploadBytes, getDownloadURL } from 'firebase/storage';
-import { storage } from '@/lib/firebase';
+import { compressImage } from '@/lib/imageCompress';
 import { Button } from '@/components/ui/Button';
 import { Input } from '@/components/ui/Input';
 import { Card } from '@/components/ui/Card';
@@ -75,20 +74,18 @@ export function CandidateForm({
         alert('이미지 파일만 업로드할 수 있습니다.');
         return;
       }
-      if (file.size > 5 * 1024 * 1024) {
-        alert('파일 크기는 5MB 이하여야 합니다.');
+      if (file.size > 10 * 1024 * 1024) {
+        alert('파일 크기는 10MB 이하여야 합니다.');
         return;
       }
 
       setUploading(true);
       try {
-        const storageRef = ref(storage, `candidates/${Date.now()}_${file.name}`);
-        await uploadBytes(storageRef, file);
-        const downloadUrl = await getDownloadURL(storageRef);
-        handleChange('photoURL', downloadUrl);
+        const dataUrl = await compressImage(file);
+        handleChange('photoURL', dataUrl);
       } catch (error) {
-        console.error('Photo upload failed:', error);
-        alert('사진 업로드에 실패했습니다. 다시 시도해주세요.');
+        console.error('Photo compress failed:', error);
+        alert('사진 처리에 실패했습니다. 다시 시도해주세요.');
       } finally {
         setUploading(false);
         if (fileInputRef.current) {
