@@ -119,7 +119,7 @@ export function verifyChain(blocks: HashBlock[]): boolean {
  *
  * @returns A partial HashBlock suitable for storing as the first chain entry.
  */
-export function createGenesisBlock(): Omit<HashBlock, 'id' | 'timestamp' | 'classId'> {
+export function createGenesisBlock(): Omit<HashBlock, 'id' | 'timestamp' | 'classId' | 'schoolId' | 'electionId'> {
   const timestamp = Date.now();
   const voteHash = CryptoJS.SHA256(`genesis|${timestamp}`).toString(CryptoJS.enc.Hex);
   const previousHash = HASH_CHAIN_GENESIS;

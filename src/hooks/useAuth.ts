@@ -9,12 +9,13 @@ import { useAuthContext } from '@/context/AuthContext';
  * @returns { user, loading, isAdmin, signIn, signOut }
  */
 export function useAuth() {
-  const { user, loading, isAdmin, signIn, signOut } = useAuthContext();
+  const { user, loading, isAdmin, schoolId, signIn, signOut } = useAuthContext();
 
   return {
     user,
     loading,
     isAdmin,
+    schoolId,
     signIn,
     signOut,
   };

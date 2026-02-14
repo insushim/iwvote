@@ -19,7 +19,7 @@ import { Spinner } from '@/components/ui/Spinner';
 import { Modal } from '@/components/ui/Modal';
 import { CodeGenerator } from '@/components/admin/CodeGenerator';
 import { CodePrintSheet } from '@/components/admin/CodePrintSheet';
-import { useElection } from '@/hooks/useElection';
+import { useSchoolElection } from '@/hooks/useSchoolElection';
 import { useAuthContext } from '@/context/AuthContext';
 import { getSchool } from '@/lib/firestore';
 import { classIdToLabel, formatDate } from '@/lib/utils';
@@ -28,8 +28,8 @@ import type { VoterCode, School } from '@/types';
 function CodesPageContent() {
   const searchParams = useSearchParams();
   const electionId = searchParams.get('id') ?? '';
-  const { election, loading: electionLoading, error: electionError } = useElection(electionId);
-  const { user } = useAuthContext();
+  const { election, loading: electionLoading, error: electionError, authorized } = useSchoolElection(electionId);
+  const { user, schoolId } = useAuthContext();
 
   const [codes, setCodes] = useState<VoterCode[]>([]);
   const [codesLoading, setCodesLoading] = useState(true);
@@ -39,9 +39,9 @@ function CodesPageContent() {
 
   // Fetch school data for student counts and class info
   useEffect(() => {
-    if (!user) return;
-    getSchool(user.uid).then(setSchool).catch(() => {});
-  }, [user]);
+    if (!user || !schoolId) return;
+    getSchool(schoolId).then(setSchool).catch(() => {});
+  }, [user, schoolId]);
 
   const fetchCodes = useCallback(async () => {
     setCodesLoading(true);
@@ -202,6 +202,17 @@ function CodesPageContent() {
     return (
       <div className="flex items-center justify-center py-20">
         <Spinner size="lg" label="선거 정보 로딩중..." />
+      </div>
+    );
+  }
+
+  if (authorized === false) {
+    return (
+      <div className="flex flex-col items-center justify-center py-20">
+        <p className="text-red-500">접근 권한이 없습니다.</p>
+        <a href="/admin/elections/" className="mt-4 text-sm text-blue-600 hover:underline">
+          선거 목록으로 돌아가기
+        </a>
       </div>
     );
   }

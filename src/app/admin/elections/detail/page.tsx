@@ -26,7 +26,7 @@ import { Badge } from '@/components/ui/Badge';
 import { Modal } from '@/components/ui/Modal';
 import { Spinner } from '@/components/ui/Spinner';
 import { ProgressBar } from '@/components/ui/ProgressBar';
-import { useElection } from '@/hooks/useElection';
+import { useSchoolElection } from '@/hooks/useSchoolElection';
 import { updateElectionStatus, purgeElectionData } from '@/lib/firestore';
 import { cn } from '@/lib/utils';
 import {
@@ -163,7 +163,7 @@ function ElectionDetailPageContent() {
   const searchParams = useSearchParams();
   const router = useRouter();
   const electionId = searchParams.get('id') ?? '';
-  const { election, loading, error } = useElection(electionId);
+  const { election, loading, error, authorized } = useSchoolElection(electionId);
 
   const [confirmAction, setConfirmAction] = useState<StatusAction | null>(null);
   const [transitioning, setTransitioning] = useState(false);
@@ -221,6 +221,20 @@ function ElectionDetailPageContent() {
     return (
       <div className="flex min-h-[60vh] items-center justify-center">
         <Spinner size="lg" label="선거 정보를 불러오는 중..." />
+      </div>
+    );
+  }
+
+  // Authorization check
+  if (authorized === false) {
+    return (
+      <div className="flex min-h-[60vh] flex-col items-center justify-center gap-4">
+        <AlertTriangle className="h-12 w-12 text-red-400" />
+        <p className="text-lg font-medium text-gray-700">접근 권한이 없습니다.</p>
+        <p className="text-sm text-gray-500">이 선거는 다른 학교에 속해 있습니다.</p>
+        <Button variant="outline" onClick={() => router.push('/admin/elections')}>
+          선거 목록으로 돌아가기
+        </Button>
       </div>
     );
   }

@@ -57,7 +57,7 @@ function formatRelativeTime(ts: { toDate: () => Date } | null): string {
 }
 
 export default function AdminDashboardPage() {
-  const { user, userProfile, isSuperAdmin } = useAuthContext();
+  const { user, userProfile, isSuperAdmin, schoolId } = useAuthContext();
   const [elections, setElections] = useState<Election[]>([]);
   const [auditLogs, setAuditLogs] = useState<AuditLog[]>([]);
   const [stats, setStats] = useState<DashboardStatsData>({
@@ -70,8 +70,7 @@ export default function AdminDashboardPage() {
 
   useEffect(() => {
     async function fetchDashboardData() {
-      if (!user) return;
-      const schoolId = user.uid;
+      if (!user || !schoolId) return;
       try {
         const [allElections, logs, todayVotes] = await Promise.all([
           getElections(schoolId),
@@ -117,7 +116,7 @@ export default function AdminDashboardPage() {
     }
 
     fetchDashboardData();
-  }, [user]);
+  }, [user, schoolId]);
 
   const recentElections = elections.slice(0, 6);
 

@@ -99,14 +99,14 @@ function getInitialForm(): NewElectionForm {
 
 export default function NewElectionPage() {
   const router = useRouter();
-  const { user, loading: authLoading } = useAuth();
+  const { user, loading: authLoading, schoolId } = useAuth();
   const [school, setSchool] = useState<import('@/types').School | null>(null);
 
   // Fetch school data when user is available
   useEffect(() => {
-    if (!user) return;
-    getSchoolData(user.uid).then(setSchool).catch(() => {});
-  }, [user]);
+    if (!user || !schoolId) return;
+    getSchoolData(schoolId).then(setSchool).catch(() => {});
+  }, [user, schoolId]);
 
   const [currentStep, setCurrentStep] = useState(0);
   const [form, setForm] = useState<NewElectionForm>(getInitialForm);
@@ -340,7 +340,7 @@ export default function NewElectionPage() {
       }));
 
       const electionId = await createElection({
-        schoolId: school?.id || user.uid,
+        schoolId: schoolId!,
         title: form.title,
         type: form.type,
         description: form.description,

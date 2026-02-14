@@ -9,11 +9,11 @@ import { Button } from '@/components/ui/Button';
 import { Card } from '@/components/ui/Card';
 import { Badge } from '@/components/ui/Badge';
 import { Spinner } from '@/components/ui/Spinner';
-import { getUsers, approveUser, rejectUser } from '@/lib/firestore';
+import { getUsers, approveUser, rejectUser, addAdminToSchool } from '@/lib/firestore';
 import type { UserProfile } from '@/types';
 
 export default function AdminUsersPage() {
-  const { user, isSuperAdmin } = useAuthContext();
+  const { user, isSuperAdmin, schoolId, isAdmin } = useAuthContext();
   const [users, setUsers] = useState<UserProfile[]>([]);
   const [loading, setLoading] = useState(true);
   const [actionLoading, setActionLoading] = useState<string | null>(null);
@@ -21,7 +21,10 @@ export default function AdminUsersPage() {
   const loadUsers = useCallback(async () => {
     setLoading(true);
     try {
-      const allUsers = await getUsers();
+      // Superadmin sees all users; school admin sees only their school's users
+      const allUsers = isSuperAdmin
+        ? await getUsers()
+        : await getUsers(undefined, schoolId ?? undefined);
       setUsers(allUsers);
     } catch (err) {
       console.error('Failed to load users:', err);
@@ -29,21 +32,26 @@ export default function AdminUsersPage() {
     } finally {
       setLoading(false);
     }
-  }, []);
+  }, [isSuperAdmin, schoolId]);
 
   useEffect(() => {
-    if (isSuperAdmin) {
+    if (isSuperAdmin || isAdmin) {
       loadUsers();
     } else {
       setLoading(false);
     }
-  }, [isSuperAdmin, loadUsers]);
+  }, [isSuperAdmin, isAdmin, loadUsers]);
 
   const handleApprove = async (uid: string) => {
     if (!user) return;
     setActionLoading(uid);
     try {
       await approveUser(uid, user.uid);
+      // Also add the approved user to the school's adminIds
+      const approvedUserProfile = users.find((u) => u.id === uid);
+      if (approvedUserProfile?.schoolId) {
+        await addAdminToSchool(approvedUserProfile.schoolId, uid);
+      }
       toast.success('사용자가 승인되었습니다.');
       await loadUsers();
     } catch (err) {
@@ -102,8 +110,8 @@ export default function AdminUsersPage() {
     );
   };
 
-  // Access denied for non-superadmins
-  if (!isSuperAdmin) {
+  // Access denied for non-admins
+  if (!isSuperAdmin && !isAdmin) {
     return (
       <div className="flex flex-col items-center justify-center py-20">
         <div className="mx-auto mb-4 flex h-16 w-16 items-center justify-center rounded-2xl bg-red-50">
@@ -111,7 +119,7 @@ export default function AdminUsersPage() {
         </div>
         <h2 className="mb-2 text-lg font-bold text-gray-900">접근 권한 없음</h2>
         <p className="text-sm text-gray-500">
-          이 페이지는 슈퍼 관리자만 접근할 수 있습니다.
+          이 페이지는 관리자만 접근할 수 있습니다.
         </p>
       </div>
     );

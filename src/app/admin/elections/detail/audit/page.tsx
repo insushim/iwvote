@@ -19,14 +19,14 @@ import { Badge } from '@/components/ui/Badge';
 import { Spinner } from '@/components/ui/Spinner';
 import { Input } from '@/components/ui/Input';
 import { AuditLog } from '@/components/admin/AuditLog';
-import { useElection } from '@/hooks/useElection';
+import { useSchoolElection } from '@/hooks/useSchoolElection';
 import { useHashChain } from '@/hooks/useHashChain';
 import { classIdToLabel, formatDate } from '@/lib/utils';
 
 function AuditPageContent() {
   const searchParams = useSearchParams();
   const electionId = searchParams.get('id') ?? '';
-  const { election, loading: electionLoading, error: electionError } = useElection(electionId);
+  const { election, loading: electionLoading, error: electionError, authorized } = useSchoolElection(electionId);
   const {
     blocks,
     loading: blocksLoading,
@@ -96,6 +96,17 @@ function AuditPageContent() {
     return (
       <div className="flex items-center justify-center py-20">
         <Spinner size="lg" label="선거 정보 로딩중..." />
+      </div>
+    );
+  }
+
+  if (authorized === false) {
+    return (
+      <div className="flex flex-col items-center justify-center py-20">
+        <p className="text-red-500">접근 권한이 없습니다.</p>
+        <a href="/admin/elections/" className="mt-4 text-sm text-blue-600 hover:underline">
+          선거 목록으로 돌아가기
+        </a>
       </div>
     );
   }

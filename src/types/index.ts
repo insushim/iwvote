@@ -8,6 +8,8 @@ export interface School {
   classesPerGrade: Record<number, number>;
   studentsPerClass: Record<string, number>;
   adminIds: string[];
+  joinCode: string;
+  joinCodeExpiresAt: Timestamp | null;
   createdAt: Timestamp;
   updatedAt: Timestamp;
 }
@@ -61,6 +63,7 @@ export interface Election {
 export interface Vote {
   id: string;
   electionId: string;
+  schoolId: string;
   candidateId?: string; // deprecated: no longer stored in new votes for vote secrecy
   encryptedVote: string;
   voteHash: string;
@@ -74,6 +77,7 @@ export interface Vote {
 export interface VoterCode {
   id: string;
   electionId: string;
+  schoolId: string;
   code: string;
   codeHash: string;
   classId: string;
@@ -88,6 +92,8 @@ export interface VoterCode {
 // ===== Hash Chain =====
 export interface HashBlock {
   id: string;
+  electionId: string;
+  schoolId: string;
   index: number;
   timestamp: Timestamp;
   voteHash: string;
@@ -113,6 +119,7 @@ export type AuditAction =
 export interface AuditLog {
   id: string;
   electionId: string;
+  schoolId: string;
   action: AuditAction;
   actorId: string;
   details: string;
@@ -128,6 +135,7 @@ export interface UserProfile {
   email: string;
   displayName: string;
   schoolName: string;
+  schoolId: string | null;
   role: UserRole;
   approved: boolean;
   createdAt: Timestamp;

@@ -13,6 +13,7 @@ import {
   Timestamp,
   setDoc,
   deleteDoc,
+  arrayUnion,
   type QueryConstraint,
 } from 'firebase/firestore';
 import { db } from '@/lib/firebase';
@@ -27,6 +28,24 @@ import type {
   UserProfile,
   UserRole,
 } from '@/types';
+
+// ============================================================
+// Utilities
+// ============================================================
+
+/**
+ * Generate a random 8-character join code using alphanumeric charset.
+ */
+export function generateJoinCode(): string {
+  const charset = 'ABCDEFGHJKMNPQRSTUVWXYZ23456789';
+  let code = '';
+  const array = new Uint8Array(8);
+  crypto.getRandomValues(array);
+  for (let i = 0; i < 8; i++) {
+    code += charset[array[i] % charset.length];
+  }
+  return code;
+}
 
 // ============================================================
 // Users
@@ -70,12 +89,15 @@ export async function hasSuperAdmin(): Promise<boolean> {
 }
 
 /**
- * Get all users, optionally filtered by role.
+ * Get all users, optionally filtered by role and/or schoolId.
  */
-export async function getUsers(role?: UserRole): Promise<UserProfile[]> {
+export async function getUsers(role?: UserRole, schoolId?: string): Promise<UserProfile[]> {
   const constraints: QueryConstraint[] = [];
   if (role) {
     constraints.push(where('role', '==', role));
+  }
+  if (schoolId) {
+    constraints.push(where('schoolId', '==', schoolId));
   }
   constraints.push(orderBy('createdAt', 'desc'));
 
@@ -129,10 +151,12 @@ export async function getSchool(schoolId: string): Promise<School | null> {
  */
 export async function createSchoolWithId(
   schoolId: string,
-  data: Omit<School, 'id' | 'createdAt' | 'updatedAt'>
+  data: Omit<School, 'id' | 'createdAt' | 'updatedAt' | 'joinCode' | 'joinCodeExpiresAt'>
 ): Promise<void> {
   await setDoc(doc(db, COLLECTIONS.SCHOOLS, schoolId), {
     ...data,
+    joinCode: generateJoinCode(),
+    joinCodeExpiresAt: null,
     createdAt: serverTimestamp(),
     updatedAt: serverTimestamp(),
   });
@@ -142,10 +166,12 @@ export async function createSchoolWithId(
  * Create a new school document with auto-generated ID.
  */
 export async function createSchool(
-  data: Omit<School, 'id' | 'createdAt' | 'updatedAt'>
+  data: Omit<School, 'id' | 'createdAt' | 'updatedAt' | 'joinCode' | 'joinCodeExpiresAt'>
 ): Promise<string> {
   const docRef = await addDoc(collection(db, COLLECTIONS.SCHOOLS), {
     ...data,
+    joinCode: generateJoinCode(),
+    joinCodeExpiresAt: null,
     createdAt: serverTimestamp(),
     updatedAt: serverTimestamp(),
   });
@@ -174,6 +200,8 @@ export async function saveSchool(
       classesPerGrade: {},
       studentsPerClass: {},
       adminIds: [],
+      joinCode: generateJoinCode(),
+      joinCodeExpiresAt: null,
       ...data,
       createdAt: serverTimestamp(),
       updatedAt: serverTimestamp(),
@@ -191,6 +219,28 @@ export async function updateSchool(
   const docRef = doc(db, COLLECTIONS.SCHOOLS, schoolId);
   await updateDoc(docRef, {
     ...data,
+    updatedAt: serverTimestamp(),
+  });
+}
+
+/**
+ * Regenerate the join code for a school.
+ */
+export async function regenerateJoinCode(schoolId: string): Promise<string> {
+  const newCode = generateJoinCode();
+  await updateDoc(doc(db, COLLECTIONS.SCHOOLS, schoolId), {
+    joinCode: newCode,
+    updatedAt: serverTimestamp(),
+  });
+  return newCode;
+}
+
+/**
+ * Add a user UID to a school's adminIds array.
+ */
+export async function addAdminToSchool(schoolId: string, uid: string): Promise<void> {
+  await updateDoc(doc(db, COLLECTIONS.SCHOOLS, schoolId), {
+    adminIds: arrayUnion(uid),
     updatedAt: serverTimestamp(),
   });
 }

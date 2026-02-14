@@ -30,7 +30,7 @@ import { Spinner } from '@/components/ui/Spinner';
 import { Modal } from '@/components/ui/Modal';
 import { ResultChart } from '@/components/admin/ResultChart';
 import { ClassResultTable } from '@/components/admin/ClassResultTable';
-import { useElection } from '@/hooks/useElection';
+import { useSchoolElection } from '@/hooks/useSchoolElection';
 import { useHashChain } from '@/hooks/useHashChain';
 import { updateElection } from '@/lib/firestore';
 import { functions } from '@/lib/firebase';
@@ -40,7 +40,7 @@ import type { ElectionResult } from '@/types';
 function ResultsPageContent() {
   const searchParams = useSearchParams();
   const electionId = searchParams.get('id') ?? '';
-  const { election, loading: electionLoading, error: electionError, refetch } = useElection(electionId);
+  const { election, loading: electionLoading, error: electionError, refetch, authorized } = useSchoolElection(electionId);
   const {
     verified,
     verifying,
@@ -121,6 +121,17 @@ function ResultsPageContent() {
     return (
       <div className="flex items-center justify-center py-20">
         <Spinner size="lg" label="선거 정보 로딩중..." />
+      </div>
+    );
+  }
+
+  if (authorized === false) {
+    return (
+      <div className="flex flex-col items-center justify-center py-20">
+        <p className="text-red-500">접근 권한이 없습니다.</p>
+        <a href="/admin/elections/" className="mt-4 text-sm text-blue-600 hover:underline">
+          선거 목록으로 돌아가기
+        </a>
       </div>
     );
   }

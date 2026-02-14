@@ -24,7 +24,7 @@ import {
   validateCandidate,
   type CandidateFormData,
 } from '@/components/admin/CandidateForm';
-import { useElection } from '@/hooks/useElection';
+import { useSchoolElection } from '@/hooks/useSchoolElection';
 import {
   addCandidate,
   updateCandidate,
@@ -52,7 +52,7 @@ function CandidatesPageContent() {
   const searchParams = useSearchParams();
   const router = useRouter();
   const electionId = searchParams.get('id') ?? '';
-  const { election, loading, error } = useElection(electionId);
+  const { election, loading, error, authorized } = useSchoolElection(electionId);
 
   const [showAddForm, setShowAddForm] = useState(false);
   const [editingId, setEditingId] = useState<string | null>(null);
@@ -166,6 +166,18 @@ function CandidatesPageContent() {
     return (
       <div className="flex min-h-[60vh] items-center justify-center">
         <Spinner size="lg" label="후보자 정보를 불러오는 중..." />
+      </div>
+    );
+  }
+
+  // ===== Authorization =====
+
+  if (authorized === false) {
+    return (
+      <div className="flex min-h-[60vh] flex-col items-center justify-center gap-4">
+        <AlertTriangle className="h-12 w-12 text-red-400" />
+        <p className="text-lg font-medium text-gray-700">접근 권한이 없습니다.</p>
+        <Button variant="outline" onClick={() => router.back()}>돌아가기</Button>
       </div>
     );
   }

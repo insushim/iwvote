@@ -19,7 +19,7 @@ import {
   getUserProfile,
   createUserProfile,
   hasSuperAdmin,
-  createSchoolWithId,
+  createSchool,
 } from '@/lib/firestore';
 import type { UserProfile, UserRole } from '@/types';
 
@@ -30,6 +30,7 @@ interface AuthContextValue {
   isAdmin: boolean;
   isSuperAdmin: boolean;
   isPending: boolean;
+  schoolId: string | null;
   signIn: (email: string, password: string) => Promise<void>;
   signUp: (email: string, password: string, displayName: string, schoolName: string) => Promise<void>;
   signOut: () => Promise<void>;
@@ -87,21 +88,22 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     const role: UserRole = superAdminExists ? 'pending' : 'superadmin';
     const approved = !superAdminExists;
 
-    await createUserProfile(newUser.uid, {
-      email: newUser.email ?? email,
-      displayName,
-      schoolName,
-      role,
-      approved,
-    });
-
-    // Auto-create school document with user UID as school ID
-    await createSchoolWithId(newUser.uid, {
+    // Auto-create school document with auto-generated ID
+    const newSchoolId = await createSchool({
       name: schoolName,
       grades: [4, 5, 6],
       classesPerGrade: { 4: 3, 5: 3, 6: 3 },
       studentsPerClass: {},
       adminIds: [newUser.uid],
+    });
+
+    await createUserProfile(newUser.uid, {
+      email: newUser.email ?? email,
+      displayName,
+      schoolName,
+      schoolId: newSchoolId,
+      role,
+      approved,
     });
 
     setUser(newUser);
@@ -123,6 +125,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   const isAdmin = userProfile?.approved === true && (userProfile.role === 'admin' || userProfile.role === 'superadmin');
   const isSuperAdmin = userProfile?.role === 'superadmin';
   const isPending = userProfile?.role === 'pending' || (userProfile !== null && !userProfile.approved);
+  const schoolId = userProfile?.schoolId ?? null;
 
   return (
     <AuthContext.Provider value={{
@@ -132,6 +135,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       isAdmin,
       isSuperAdmin,
       isPending,
+      schoolId,
       signIn,
       signUp,
       signOut,

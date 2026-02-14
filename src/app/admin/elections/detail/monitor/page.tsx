@@ -18,7 +18,7 @@ import { Spinner } from '@/components/ui/Spinner';
 import { Modal } from '@/components/ui/Modal';
 import { LiveMonitor } from '@/components/admin/LiveMonitor';
 import { ClassProgress } from '@/components/admin/ClassProgress';
-import { useElection } from '@/hooks/useElection';
+import { useSchoolElection } from '@/hooks/useSchoolElection';
 import { useRealtimeVotes } from '@/hooks/useRealtimeVotes';
 import { updateElection } from '@/lib/firestore';
 import { classIdToLabel, formatDate } from '@/lib/utils';
@@ -26,7 +26,7 @@ import { classIdToLabel, formatDate } from '@/lib/utils';
 function MonitorPageContent() {
   const searchParams = useSearchParams();
   const electionId = searchParams.get('id') ?? '';
-  const { election, loading: electionLoading, error: electionError, refetch } = useElection(electionId);
+  const { election, loading: electionLoading, error: electionError, refetch, authorized } = useSchoolElection(electionId);
   const {
     classCounts,
     recentVotes,
@@ -69,6 +69,17 @@ function MonitorPageContent() {
     return (
       <div className="flex items-center justify-center py-20">
         <Spinner size="lg" label="선거 정보 로딩중..." />
+      </div>
+    );
+  }
+
+  if (authorized === false) {
+    return (
+      <div className="flex flex-col items-center justify-center py-20">
+        <p className="text-red-500">접근 권한이 없습니다.</p>
+        <a href="/admin/elections/" className="mt-4 text-sm text-blue-600 hover:underline">
+          선거 목록으로 돌아가기
+        </a>
       </div>
     );
   }

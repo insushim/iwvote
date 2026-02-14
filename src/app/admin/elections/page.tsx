@@ -25,7 +25,7 @@ const filterTabs: TabConfig[] = [
 ];
 
 export default function ElectionsPage() {
-  const { user } = useAuthContext();
+  const { user, schoolId } = useAuthContext();
   const [elections, setElections] = useState<Election[]>([]);
   const [loading, setLoading] = useState(true);
   const [activeTab, setActiveTab] = useState<FilterTab>('all');
@@ -33,9 +33,9 @@ export default function ElectionsPage() {
 
   useEffect(() => {
     async function fetchElections() {
-      if (!user) return;
+      if (!user || !schoolId) return;
       try {
-        const data = await getElections(user.uid);
+        const data = await getElections(schoolId);
         setElections(data);
       } catch (err) {
         console.error('Failed to fetch elections:', err);
@@ -45,7 +45,7 @@ export default function ElectionsPage() {
     }
 
     fetchElections();
-  }, [user]);
+  }, [user, schoolId]);
 
   const filteredElections = useMemo(() => {
     const currentTab = filterTabs.find((t) => t.key === activeTab);

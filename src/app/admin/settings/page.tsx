@@ -9,6 +9,9 @@ import {
   Users,
   UserPlus,
   CheckSquare,
+  KeyRound,
+  Copy,
+  RefreshCw,
 } from 'lucide-react';
 import { Button } from '@/components/ui/Button';
 import { Card } from '@/components/ui/Card';
@@ -16,12 +19,12 @@ import { Input } from '@/components/ui/Input';
 import { Badge } from '@/components/ui/Badge';
 import { Spinner } from '@/components/ui/Spinner';
 import { useAuthContext } from '@/context/AuthContext';
-import { getSchool, saveSchool } from '@/lib/firestore';
+import { getSchool, saveSchool, regenerateJoinCode } from '@/lib/firestore';
 import { DEFAULT_GRADES } from '@/constants';
 import type { School as SchoolType } from '@/types';
 
 export default function SettingsPage() {
-  const { user, loading: authLoading, userProfile } = useAuthContext();
+  const { user, loading: authLoading, userProfile, schoolId: ctxSchoolId } = useAuthContext();
 
   const [schoolName, setSchoolName] = useState('');
   const [selectedGrades, setSelectedGrades] = useState<number[]>([]);
@@ -31,22 +34,23 @@ export default function SettingsPage() {
   const [newAdminEmail, setNewAdminEmail] = useState('');
   const [saving, setSaving] = useState(false);
   const [loading, setLoading] = useState(true);
-  const [schoolId, setSchoolId] = useState<string | null>(null);
+  const [currentJoinCode, setCurrentJoinCode] = useState('');
+  const [regenerating, setRegenerating] = useState(false);
 
   // Load school data
   const loadSchoolData = useCallback(async () => {
-    if (!user) return;
+    if (!user || !ctxSchoolId) return;
     setLoading(true);
 
     try {
-      setSchoolId(user.uid);
-      const school = await getSchool(user.uid);
+      const school = await getSchool(ctxSchoolId);
       if (school) {
         setSchoolName(school.name || userProfile?.schoolName || '');
         setSelectedGrades(school.grades || [4, 5, 6]);
         setClassesPerGrade(school.classesPerGrade || { 4: 3, 5: 3, 6: 3 });
         setStudentsPerClass(school.studentsPerClass || {});
         setAdminEmails(school.adminIds || (user.email ? [user.email] : []));
+        setCurrentJoinCode(school.joinCode || '');
       } else {
         // No school document yet - set defaults from user profile
         setSchoolName(userProfile?.schoolName || '');
@@ -64,7 +68,7 @@ export default function SettingsPage() {
     } finally {
       setLoading(false);
     }
-  }, [user]);
+  }, [user, ctxSchoolId]);
 
   useEffect(() => {
     if (!authLoading && user) {
@@ -150,6 +154,29 @@ export default function SettingsPage() {
     toast.success('관리자 이메일이 추가되었습니다.');
   };
 
+  // Regenerate join code
+  const handleRegenerateJoinCode = async () => {
+    if (!ctxSchoolId) return;
+    setRegenerating(true);
+    try {
+      const newCode = await regenerateJoinCode(ctxSchoolId);
+      setCurrentJoinCode(newCode);
+      toast.success('가입 코드가 재생성되었습니다.');
+    } catch (err) {
+      const message = err instanceof Error ? err.message : '코드 재생성에 실패했습니다.';
+      toast.error(message);
+    } finally {
+      setRegenerating(false);
+    }
+  };
+
+  // Copy join code to clipboard
+  const copyJoinCode = () => {
+    if (!currentJoinCode) return;
+    navigator.clipboard.writeText(currentJoinCode);
+    toast.success('가입 코드가 복사되었습니다.');
+  };
+
   // Save settings
   const handleSave = async () => {
     if (!schoolName.trim()) {
@@ -160,14 +187,14 @@ export default function SettingsPage() {
       toast.error('최소 1개 학년을 선택하세요.');
       return;
     }
-    if (!schoolId) {
+    if (!ctxSchoolId) {
       toast.error('학교 정보를 찾을 수 없습니다.');
       return;
     }
 
     setSaving(true);
     try {
-      await saveSchool(schoolId, {
+      await saveSchool(ctxSchoolId, {
         name: schoolName.trim(),
         grades: selectedGrades,
         classesPerGrade,
@@ -418,6 +445,61 @@ export default function SettingsPage() {
               추가
             </Button>
           </div>
+        </div>
+      </Card>
+
+      {/* Join Code */}
+      <Card
+        padding="md"
+        header={
+          <div className="flex items-center gap-2">
+            <KeyRound className="h-4 w-4 text-gray-500" />
+            <h2 className="font-semibold text-gray-900">학교 가입 코드</h2>
+          </div>
+        }
+      >
+        <div className="space-y-4">
+          <p className="text-sm text-gray-500">
+            다른 관리자가 이 학교에 합류할 때 사용하는 8자리 가입 코드입니다.
+          </p>
+
+          {currentJoinCode ? (
+            <div className="flex items-center gap-3">
+              <code className="rounded-lg bg-gray-100 px-4 py-2.5 font-mono text-lg font-bold tracking-widest text-gray-900">
+                {currentJoinCode}
+              </code>
+              <Button
+                variant="outline"
+                size="sm"
+                iconLeft={<Copy className="h-4 w-4" />}
+                onClick={copyJoinCode}
+              >
+                복사
+              </Button>
+              <Button
+                variant="outline"
+                size="sm"
+                iconLeft={<RefreshCw className="h-4 w-4" />}
+                onClick={handleRegenerateJoinCode}
+                loading={regenerating}
+              >
+                재생성
+              </Button>
+            </div>
+          ) : (
+            <div className="flex items-center gap-3">
+              <span className="text-sm text-gray-400">코드가 아직 생성되지 않았습니다.</span>
+              <Button
+                variant="primary"
+                size="sm"
+                iconLeft={<KeyRound className="h-4 w-4" />}
+                onClick={handleRegenerateJoinCode}
+                loading={regenerating}
+              >
+                코드 생성
+              </Button>
+            </div>
+          )}
         </div>
       </Card>
 

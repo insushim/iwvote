@@ -85,7 +85,7 @@ function validateCodeFormat(code: string): boolean {
   return true;
 }
 
-// Admin role verification helper
+// Admin role verification helper (legacy — kept for backwards compat)
 async function verifyAdmin(uid: string): Promise<void> {
   const userDoc = await db.collection('users').doc(uid).get();
   if (!userDoc.exists) {
@@ -97,13 +97,46 @@ async function verifyAdmin(uid: string): Promise<void> {
   }
 }
 
+// Admin role + school ownership verification helper
+// Returns the election document data to avoid duplicate reads
+async function verifyAdminForSchool(
+  uid: string,
+  electionId: string
+): Promise<FirebaseFirestore.DocumentData> {
+  const userDoc = await db.collection('users').doc(uid).get();
+  if (!userDoc.exists) {
+    throw new functions.https.HttpsError('permission-denied', '관리자 권한이 없습니다.');
+  }
+  const userData = userDoc.data()!;
+  const role = userData.role;
+  if (role !== 'admin' && role !== 'superadmin') {
+    throw new functions.https.HttpsError('permission-denied', '관리자 권한이 없습니다.');
+  }
+
+  const electionSnap = await db.collection(COLLECTIONS.ELECTIONS).doc(electionId).get();
+  if (!electionSnap.exists) {
+    throw new functions.https.HttpsError('not-found', '선거를 찾을 수 없습니다.');
+  }
+  const electionData = electionSnap.data()!;
+
+  // Superadmin can access any school's elections
+  if (role !== 'superadmin') {
+    if (userData.schoolId !== electionData.schoolId) {
+      throw new functions.https.HttpsError('permission-denied', '해당 학교의 선거에 접근 권한이 없습니다.');
+    }
+  }
+
+  return electionData;
+}
+
 // Audit log helper
-async function createAuditLog(electionId: string, action: string, actorId: string, details: string) {
+async function createAuditLog(electionId: string, action: string, actorId: string, details: string, schoolId?: string) {
   await db.collection(COLLECTIONS.AUDIT_LOGS).add({
     electionId,
     action,
     actorId,
     details,
+    schoolId: schoolId || '',
     timestamp: admin.firestore.FieldValue.serverTimestamp(),
     ipHash: '',
   });
@@ -243,6 +276,7 @@ export const castVote = functions.https.onCall(async (data) => {
     const voteRef = db.collection(COLLECTIONS.VOTES).doc();
     transaction.set(voteRef, {
       electionId,
+      schoolId: election.schoolId || '',
       encryptedVote,
       voteHash,
       previousHash: previousBlockHash,
@@ -261,6 +295,7 @@ export const castVote = functions.https.onCall(async (data) => {
     const blockRef = db.collection(COLLECTIONS.HASH_CHAIN).doc();
     transaction.set(blockRef, {
       electionId,
+      schoolId: election.schoolId || '',
       index: newBlockIndex,
       timestamp: firestoreTimestamp,
       voteHash,
@@ -291,19 +326,14 @@ export const getElectionResults = functions.https.onCall(async (data, context) =
   if (!context.auth) {
     throw new functions.https.HttpsError('unauthenticated', '인증이 필요합니다.');
   }
-  await verifyAdmin(context.auth.uid);
 
   const { electionId } = data;
   if (!electionId || typeof electionId !== 'string') {
     throw new functions.https.HttpsError('invalid-argument', '선거 ID가 필요합니다.');
   }
 
-  // Get election
-  const electionSnap = await db.collection(COLLECTIONS.ELECTIONS).doc(electionId).get();
-  if (!electionSnap.exists) {
-    throw new functions.https.HttpsError('not-found', '선거를 찾을 수 없습니다.');
-  }
-  const election = electionSnap.data()!;
+  // Verify admin + school ownership (also fetches election data)
+  const election = await verifyAdminForSchool(context.auth.uid, electionId);
   if (election.status !== 'closed' && election.status !== 'finalized') {
     throw new functions.https.HttpsError('failed-precondition', '투표가 종료된 후에 결과를 확인할 수 있습니다.');
   }
@@ -407,7 +437,8 @@ export const onVoteCreated = functions.firestore
       voteData.electionId,
       'vote_cast',
       'voter',
-      `반 ${voteData.classId}에서 투표가 기록되었습니다.`
+      `반 ${voteData.classId}에서 투표가 기록되었습니다.`,
+      voteData.schoolId || ''
     );
   });
 
@@ -431,7 +462,8 @@ export const onElectionStatusChange = functions.firestore
         electionId,
         `election_${after.status}`,
         after.createdBy || 'system',
-        statusMessages[after.status] || `상태가 ${after.status}(으)로 변경되었습니다.`
+        statusMessages[after.status] || `상태가 ${after.status}(으)로 변경되었습니다.`,
+        after.schoolId || ''
       );
     }
   });
@@ -446,7 +478,6 @@ export const generateVoterCodes = functions.https.onCall(async (data, context) =
   if (!context.auth) {
     throw new functions.https.HttpsError('unauthenticated', '인증이 필요합니다.');
   }
-  await verifyAdmin(context.auth.uid);
 
   const { electionId, classId, grade, classNum, count } = data;
 
@@ -463,11 +494,8 @@ export const generateVoterCodes = functions.https.onCall(async (data, context) =
     throw new functions.https.HttpsError('invalid-argument', '생성 수량은 1~100 사이여야 합니다.');
   }
 
-  // Verify election exists
-  const electionSnap = await db.collection(COLLECTIONS.ELECTIONS).doc(electionId).get();
-  if (!electionSnap.exists) {
-    throw new functions.https.HttpsError('not-found', '선거를 찾을 수 없습니다.');
-  }
+  // Verify admin + school ownership (also fetches election data)
+  const electionData = await verifyAdminForSchool(context.auth.uid, electionId);
 
   // Generate codes server-side
   const crypto = await import('crypto');
@@ -489,6 +517,7 @@ export const generateVoterCodes = functions.https.onCall(async (data, context) =
       code: code, // Admin needs to view/print codes
       codeHash,
       electionId,
+      schoolId: electionData.schoolId || '',
       classId,
       grade,
       classNum,
@@ -507,7 +536,8 @@ export const generateVoterCodes = functions.https.onCall(async (data, context) =
     electionId,
     'codes_generated',
     context.auth.uid,
-    `${classId} 반 투표 코드 ${count}개 생성`
+    `${classId} 반 투표 코드 ${count}개 생성`,
+    electionData.schoolId || ''
   );
 
   return { codes };
@@ -521,12 +551,14 @@ export const verifyHashChain = functions.https.onCall(async (data, context) => {
   if (!context.auth) {
     throw new functions.https.HttpsError('unauthenticated', '인증이 필요합니다.');
   }
-  await verifyAdmin(context.auth.uid);
 
   const { electionId } = data;
   if (!electionId) {
     throw new functions.https.HttpsError('invalid-argument', '선거 ID가 필요합니다.');
   }
+
+  // Verify admin + school ownership
+  const electionData = await verifyAdminForSchool(context.auth.uid, electionId);
 
   const chainSnapshot = await db
     .collection(COLLECTIONS.HASH_CHAIN)
@@ -574,8 +606,42 @@ export const verifyHashChain = functions.https.onCall(async (data, context) => {
     context.auth.uid,
     valid
       ? `해시 체인 검증 완료: ${blocks.length}개 블록 모두 정상`
-      : `해시 체인 검증 실패: ${brokenAt}번째 블록에서 오류 발견`
+      : `해시 체인 검증 실패: ${brokenAt}번째 블록에서 오류 발견`,
+    electionData.schoolId || ''
   );
 
   return { valid, blockCount: blocks.length, brokenAt };
+});
+
+// ============================================================
+// Cloud Function: lookupSchoolByJoinCode
+// Looks up a school by its join code (no auth required for registration)
+// ============================================================
+
+export const lookupSchoolByJoinCode = functions.https.onCall(async (data) => {
+  const { joinCode } = data;
+
+  if (!joinCode || typeof joinCode !== 'string' || joinCode.trim().length < 8) {
+    throw new functions.https.HttpsError('invalid-argument', '8자리 가입 코드를 입력해주세요.');
+  }
+
+  const normalizedCode = joinCode.trim().toUpperCase();
+
+  const schoolsSnap = await db
+    .collection('schools')
+    .where('joinCode', '==', normalizedCode)
+    .limit(1)
+    .get();
+
+  if (schoolsSnap.empty) {
+    throw new functions.https.HttpsError('not-found', '해당 가입 코드와 일치하는 학교를 찾을 수 없습니다.');
+  }
+
+  const schoolDoc = schoolsSnap.docs[0];
+  const schoolData = schoolDoc.data();
+
+  return {
+    schoolId: schoolDoc.id,
+    schoolName: schoolData.name || '',
+  };
 });
