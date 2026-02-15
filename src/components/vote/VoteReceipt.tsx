@@ -60,14 +60,6 @@ export function VoteReceipt({ receipt }: VoteReceiptProps) {
           </p>
         </div>
 
-        {/* Block Index */}
-        <div>
-          <p className="text-xs font-medium text-gray-500">블록 번호</p>
-          <p className="mt-0.5 text-sm font-semibold text-gray-800">
-            #{receipt.blockIndex}
-          </p>
-        </div>
-
         {/* Vote Hash */}
         <div>
           <p className="text-xs font-medium text-gray-500">투표 해시</p>

@@ -18,7 +18,6 @@ import {
 import {
   getUserProfile,
   createUserProfile,
-  hasSuperAdmin,
   createSchool,
 } from '@/lib/firestore';
 import type { UserProfile, UserRole } from '@/types';
@@ -83,10 +82,9 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   ) => {
     const newUser = await signUpWithEmail(email, password, displayName);
 
-    // First user becomes superadmin; subsequent users are pending
-    const superAdminExists = await hasSuperAdmin();
-    const role: UserRole = superAdminExists ? 'pending' : 'superadmin';
-    const approved = !superAdminExists;
+    // All new users start as admin for their own school (never superadmin from client)
+    const role: UserRole = 'admin';
+    const approved = true;
 
     // Auto-create school document with auto-generated ID
     const newSchoolId = await createSchool({

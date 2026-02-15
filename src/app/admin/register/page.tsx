@@ -12,7 +12,6 @@ import { APP_NAME } from '@/constants';
 import { functions } from '@/lib/firebase';
 import {
   createUserProfile,
-  hasSuperAdmin,
   createSchool,
   addAdminToSchool,
 } from '@/lib/firestore';
@@ -116,13 +115,9 @@ export default function AdminRegisterPage() {
     setLoading(true);
     try {
       const newUser = await signUpWithEmail(email, password, displayName);
-      const superAdminExists = await hasSuperAdmin();
 
       if (mode === 'new') {
-        // New school: user becomes admin (or superadmin if first)
-        const role = superAdminExists ? 'admin' : 'superadmin';
-        const approved = true; // New school creator is auto-approved
-
+        // New school: user becomes admin (auto-approved)
         const newSchoolId = await createSchool({
           name: schoolName,
           grades: [4, 5, 6],
@@ -136,21 +131,18 @@ export default function AdminRegisterPage() {
           displayName,
           schoolName,
           schoolId: newSchoolId,
-          role,
-          approved,
+          role: 'admin',
+          approved: true,
         });
       } else {
         // Join existing school: user is pending approval
-        const role = superAdminExists ? 'pending' : 'superadmin';
-        const approved = !superAdminExists;
-
         await createUserProfile(newUser.uid, {
           email: newUser.email ?? email,
           displayName,
           schoolName: joinedSchoolName,
           schoolId: joinedSchoolId,
-          role,
-          approved,
+          role: 'pending',
+          approved: false,
         });
       }
 

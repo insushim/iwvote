@@ -83,8 +83,9 @@ service cloud.firestore {
     match /users/{userId} {
       // Any authenticated user can read (needed for auth context)
       allow read: if request.auth != null;
-      // Users can only create their own profile
-      allow create: if request.auth != null && request.auth.uid == userId;
+      // Users can only create their own profile (never as superadmin — use claimSuperAdmin Cloud Function)
+      allow create: if request.auth != null && request.auth.uid == userId
+        && request.resource.data.role != 'superadmin';
       // Users can update their own profile EXCEPT protected fields
       // Admins can update any user
       allow update: if isAdmin() ||

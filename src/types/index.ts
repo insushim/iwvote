@@ -174,7 +174,7 @@ export interface ElectionResult {
 export interface VoteReceipt {
   voteHash: string;
   timestamp: number;
-  blockIndex: number;
+  blockIndex?: number; // optional: assigned async by hash chain trigger
 }
 
 // ===== Form Types =====

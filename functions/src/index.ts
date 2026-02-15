@@ -19,6 +19,51 @@ const COLLECTIONS = {
 } as const;
 
 // ============================================================
+// Rate Limiting (in-memory, per Cloud Functions instance)
+// ============================================================
+
+const rateLimitMap = new Map<string, { count: number; resetAt: number }>();
+
+function checkRateLimit(identifier: string, maxRequests: number = 10, windowMs: number = 60000): void {
+  const now = Date.now();
+  const entry = rateLimitMap.get(identifier);
+
+  if (entry && now > entry.resetAt) {
+    rateLimitMap.delete(identifier);
+  }
+
+  const current = rateLimitMap.get(identifier);
+  if (!current) {
+    rateLimitMap.set(identifier, { count: 1, resetAt: now + windowMs });
+    return;
+  }
+
+  current.count++;
+  if (current.count > maxRequests) {
+    throw new functions.https.HttpsError(
+      'resource-exhausted',
+      '요청이 너무 많습니다. 잠시 후 다시 시도해주세요.'
+    );
+  }
+}
+
+function getClientIp(context: functions.https.CallableContext): string {
+  const forwarded = context.rawRequest?.headers?.['x-forwarded-for'];
+  if (forwarded) {
+    return (Array.isArray(forwarded) ? forwarded[0] : forwarded).split(',')[0].trim();
+  }
+  return context.rawRequest?.ip || 'unknown';
+}
+
+// Periodic cleanup of expired rate limit entries
+setInterval(() => {
+  const now = Date.now();
+  for (const [key, val] of rateLimitMap) {
+    if (now > val.resetAt) rateLimitMap.delete(key);
+  }
+}, 5 * 60 * 1000);
+
+// ============================================================
 // Crypto helpers (server-side only — keys never leave here)
 // ============================================================
 
@@ -147,7 +192,11 @@ async function createAuditLog(electionId: string, action: string, actorId: strin
 // Validates a vote code and returns election info (no auth required)
 // ============================================================
 
-export const validateCode = functions.https.onCall(async (data) => {
+export const validateCode = functions.https.onCall(async (data, context) => {
+  // Rate limit: 10 attempts per minute per IP
+  const ip = getClientIp(context);
+  checkRateLimit(`validate:${ip}`, 10);
+
   const { code } = data;
 
   if (!code || typeof code !== 'string') {
@@ -185,9 +234,15 @@ export const validateCode = functions.https.onCall(async (data) => {
 // ============================================================
 // Cloud Function: castVote
 // Handles the entire voting process server-side (no auth required)
+// Hash chain is built asynchronously via onVoteCreated trigger
+// to avoid Firestore document contention bottleneck.
 // ============================================================
 
-export const castVote = functions.https.onCall(async (data) => {
+export const castVote = functions.https.onCall(async (data, context) => {
+  // Rate limit: 5 votes per minute per IP
+  const ip = getClientIp(context);
+  checkRateLimit(`vote:${ip}`, 5);
+
   const { code, electionId, candidateId } = data;
 
   // Validate input
@@ -223,11 +278,38 @@ export const castVote = functions.https.onCall(async (data) => {
     throw new functions.https.HttpsError('already-exists', '이미 사용된 투표 코드입니다.');
   }
 
-  // Run Firestore transaction
-  let receiptData: { voteHash: string; timestamp: number; blockIndex: number } | null = null;
+  // Read election OUTSIDE transaction to avoid document contention.
+  // Election status is unlikely to change during the milliseconds of our transaction,
+  // and even if it does, the worst case is one extra vote slips through after close.
+  const electionRef = db.collection(COLLECTIONS.ELECTIONS).doc(electionId);
+  const electionSnap = await electionRef.get();
+  if (!electionSnap.exists) {
+    throw new functions.https.HttpsError('not-found', '선거를 찾을 수 없습니다.');
+  }
+  const election = electionSnap.data()!;
+  if (election.status !== 'active') {
+    throw new functions.https.HttpsError('failed-precondition', '현재 투표가 진행 중이 아닙니다.');
+  }
 
+  // Validate candidateId against election's candidate list
+  const isAbstention = candidateId === '__abstention__';
+  const isValidCandidate = election.candidates.some((c: { id: string }) => c.id === candidateId);
+  if (!isAbstention && !isValidCandidate) {
+    throw new functions.https.HttpsError('invalid-argument', '유효하지 않은 후보자입니다.');
+  }
+
+  // Encrypt the candidateId server-side
+  const encryptedVote = encryptVote(candidateId);
+  const timestamp = Date.now();
+  const firestoreTimestamp = admin.firestore.Timestamp.fromMillis(timestamp);
+
+  // Compute a simple vote hash for the receipt (not chain-linked)
+  const voteHash = CryptoJS.SHA256(`${encryptedVote}|${timestamp}`).toString(CryptoJS.enc.Hex);
+
+  // Lean transaction: only touches voterCode + vote documents.
+  // No election document write = no contention bottleneck.
   await db.runTransaction(async (transaction) => {
-    // Re-read voter code inside transaction
+    // Re-read voter code inside transaction to prevent double-voting
     const voterCodeRef = db.collection(COLLECTIONS.VOTER_CODES).doc(voterCodeId);
     const freshVoterCode = await transaction.get(voterCodeRef);
     if (!freshVoterCode.exists) {
@@ -243,35 +325,6 @@ export const castVote = functions.https.onCall(async (data) => {
       throw new functions.https.HttpsError('permission-denied', '이 투표 코드는 해당 선거에 속하지 않습니다.');
     }
 
-    // Re-read election
-    const electionRef = db.collection(COLLECTIONS.ELECTIONS).doc(electionId);
-    const electionSnap = await transaction.get(electionRef);
-    if (!electionSnap.exists) {
-      throw new functions.https.HttpsError('not-found', '선거를 찾을 수 없습니다.');
-    }
-    const election = electionSnap.data()!;
-    if (election.status !== 'active') {
-      throw new functions.https.HttpsError('failed-precondition', '현재 투표가 진행 중이 아닙니다.');
-    }
-
-    // Validate candidateId against election's candidate list
-    const isAbstention = candidateId === '__abstention__';
-    const isValidCandidate = election.candidates.some((c: { id: string }) => c.id === candidateId);
-    if (!isAbstention && !isValidCandidate) {
-      throw new functions.https.HttpsError('invalid-argument', '유효하지 않은 후보자입니다.');
-    }
-
-    // Encrypt the candidateId server-side
-    const encryptedVote = encryptVote(candidateId);
-    const timestamp = Date.now();
-
-    // Compute hash chain
-    const previousBlockHash = election.hashChainHead || HASH_CHAIN_GENESIS;
-    const newBlockIndex = election.totalVoted ?? 0;
-    const voteHash = computeVoteHash(encryptedVote, timestamp, previousBlockHash);
-    const blockHash = computeBlockHash(newBlockIndex, timestamp, voteHash, previousBlockHash);
-    const firestoreTimestamp = admin.firestore.Timestamp.fromMillis(timestamp);
-
     // Create vote document (candidateId only stored encrypted)
     const voteRef = db.collection(COLLECTIONS.VOTES).doc();
     transaction.set(voteRef, {
@@ -279,7 +332,6 @@ export const castVote = functions.https.onCall(async (data) => {
       schoolId: election.schoolId || '',
       encryptedVote,
       voteHash,
-      previousHash: previousBlockHash,
       classId: freshVoterCodeData.classId,
       timestamp: firestoreTimestamp,
       verified: false,
@@ -290,31 +342,15 @@ export const castVote = functions.https.onCall(async (data) => {
       used: true,
       usedAt: firestoreTimestamp,
     });
-
-    // Create hash chain block
-    const blockRef = db.collection(COLLECTIONS.HASH_CHAIN).doc();
-    transaction.set(blockRef, {
-      electionId,
-      schoolId: election.schoolId || '',
-      index: newBlockIndex,
-      timestamp: firestoreTimestamp,
-      voteHash,
-      previousHash: previousBlockHash,
-      blockHash,
-      classId: freshVoterCodeData.classId,
-    });
-
-    // Update election counters
-    transaction.update(electionRef, {
-      totalVoted: (election.totalVoted ?? 0) + 1,
-      hashChainHead: blockHash,
-      updatedAt: firestoreTimestamp,
-    });
-
-    receiptData = { voteHash, timestamp, blockIndex: newBlockIndex };
   });
 
-  return receiptData;
+  // Non-transactional counter increment — commutative, no contention
+  await electionRef.update({
+    totalVoted: admin.firestore.FieldValue.increment(1),
+    updatedAt: firestoreTimestamp,
+  });
+
+  return { voteHash, timestamp };
 });
 
 // ============================================================
@@ -426,20 +462,57 @@ export const getElectionResults = functions.https.onCall(async (data, context) =
 });
 
 // ============================================================
-// Firestore triggers (audit logging)
+// Firestore triggers
 // ============================================================
 
+// onVoteCreated: audit log + async hash chain building + counter
 export const onVoteCreated = functions.firestore
   .document('votes/{voteId}')
   .onCreate(async (snap) => {
     const voteData = snap.data();
-    await createAuditLog(
+
+    // Audit log (fire-and-forget, don't block hash chain)
+    createAuditLog(
       voteData.electionId,
       'vote_cast',
       'voter',
       `반 ${voteData.classId}에서 투표가 기록되었습니다.`,
       voteData.schoolId || ''
-    );
+    ).catch(() => {});
+
+    // Build hash chain block asynchronously.
+    // Uses a transaction on the election doc to serialize hash chain updates.
+    // This runs in the background so it doesn't block the voter.
+    await db.runTransaction(async (transaction) => {
+      const electionRef = db.collection(COLLECTIONS.ELECTIONS).doc(voteData.electionId);
+      const electionSnap = await transaction.get(electionRef);
+      if (!electionSnap.exists) return;
+
+      const election = electionSnap.data()!;
+      const previousBlockHash = election.hashChainHead || HASH_CHAIN_GENESIS;
+      const blockIndex = election.hashChainLength ?? election.totalVoted ?? 0;
+      const ts = voteData.timestamp?.toMillis ? voteData.timestamp.toMillis() : Date.now();
+
+      const voteHash = computeVoteHash(voteData.encryptedVote, ts, previousBlockHash);
+      const blockHash = computeBlockHash(blockIndex, ts, voteHash, previousBlockHash);
+
+      const blockRef = db.collection(COLLECTIONS.HASH_CHAIN).doc();
+      transaction.set(blockRef, {
+        electionId: voteData.electionId,
+        schoolId: voteData.schoolId || '',
+        index: blockIndex,
+        timestamp: voteData.timestamp,
+        voteHash,
+        previousHash: previousBlockHash,
+        blockHash,
+        classId: voteData.classId,
+      });
+
+      transaction.update(electionRef, {
+        hashChainHead: blockHash,
+        hashChainLength: (election.hashChainLength ?? election.totalVoted ?? 0) + 1,
+      });
+    });
   });
 
 export const onElectionStatusChange = functions.firestore
@@ -618,7 +691,11 @@ export const verifyHashChain = functions.https.onCall(async (data, context) => {
 // Looks up a school by its join code (no auth required for registration)
 // ============================================================
 
-export const lookupSchoolByJoinCode = functions.https.onCall(async (data) => {
+export const lookupSchoolByJoinCode = functions.https.onCall(async (data, context) => {
+  // Rate limit: 5 lookups per minute per IP
+  const ip = getClientIp(context);
+  checkRateLimit(`lookup:${ip}`, 5);
+
   const { joinCode } = data;
 
   if (!joinCode || typeof joinCode !== 'string' || joinCode.trim().length < 8) {
@@ -644,4 +721,57 @@ export const lookupSchoolByJoinCode = functions.https.onCall(async (data) => {
     schoolId: schoolDoc.id,
     schoolName: schoolData.name || '',
   };
+});
+
+// ============================================================
+// Cloud Function: claimSuperAdmin
+// Promotes the first admin to superadmin (one-time setup)
+// Requires ADMIN_SETUP_KEY env var if configured.
+// ============================================================
+
+export const claimSuperAdmin = functions.https.onCall(async (data, context) => {
+  if (!context.auth) {
+    throw new functions.https.HttpsError('unauthenticated', '인증이 필요합니다.');
+  }
+
+  // Rate limit
+  const ip = getClientIp(context);
+  checkRateLimit(`claim:${ip}`, 3);
+
+  // Check if superadmin already exists
+  const superAdminQuery = await db
+    .collection('users')
+    .where('role', '==', 'superadmin')
+    .limit(1)
+    .get();
+
+  if (!superAdminQuery.empty) {
+    throw new functions.https.HttpsError('already-exists', '이미 최고 관리자가 존재합니다.');
+  }
+
+  // Check setup key if configured
+  const setupKey = process.env.ADMIN_SETUP_KEY;
+  if (setupKey) {
+    const { setupKey: providedKey } = data;
+    if (!providedKey || providedKey !== setupKey) {
+      throw new functions.https.HttpsError('permission-denied', '설정 키가 올바르지 않습니다.');
+    }
+  }
+
+  // Verify user profile exists
+  const userRef = db.collection('users').doc(context.auth.uid);
+  const userSnap = await userRef.get();
+  if (!userSnap.exists) {
+    throw new functions.https.HttpsError('not-found', '사용자 프로필을 찾을 수 없습니다. 먼저 회원가입을 완료해주세요.');
+  }
+
+  // Promote to superadmin
+  await userRef.update({
+    role: 'superadmin',
+    approved: true,
+    approvedAt: admin.firestore.FieldValue.serverTimestamp(),
+    approvedBy: 'system',
+  });
+
+  return { success: true };
 });

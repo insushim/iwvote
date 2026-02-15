@@ -19,6 +19,7 @@ import {
   CheckCircle2,
   Lock,
   AlertTriangle,
+  FileCheck,
 } from 'lucide-react';
 import { Button } from '@/components/ui/Button';
 import { Card } from '@/components/ui/Card';
@@ -169,6 +170,7 @@ function ElectionDetailPageContent() {
   const [transitioning, setTransitioning] = useState(false);
   const [showPurgeModal, setShowPurgeModal] = useState(false);
   const [purging, setPurging] = useState(false);
+  const [parentalConsentChecked, setParentalConsentChecked] = useState(false);
 
   // Vote rate calculation
   const voteRate = useMemo(() => {
@@ -633,7 +635,12 @@ function ElectionDetailPageContent() {
       {/* Confirmation Modal */}
       <Modal
         isOpen={!!confirmAction}
-        onClose={() => !transitioning && setConfirmAction(null)}
+        onClose={() => {
+          if (!transitioning) {
+            setConfirmAction(null);
+            setParentalConsentChecked(false);
+          }
+        }}
         title={confirmAction?.confirmTitle || ''}
         size="sm"
         footer={
@@ -641,7 +648,10 @@ function ElectionDetailPageContent() {
             <Button
               variant="outline"
               size="md"
-              onClick={() => setConfirmAction(null)}
+              onClick={() => {
+                setConfirmAction(null);
+                setParentalConsentChecked(false);
+              }}
               disabled={transitioning}
             >
               취소
@@ -650,6 +660,9 @@ function ElectionDetailPageContent() {
               variant={confirmAction?.variant === 'danger' ? 'danger' : 'primary'}
               size="md"
               loading={transitioning}
+              disabled={
+                confirmAction?.targetStatus === 'active' && !parentalConsentChecked
+              }
               onClick={() =>
                 confirmAction && handleStatusChange(confirmAction.targetStatus)
               }
@@ -665,6 +678,34 @@ function ElectionDetailPageContent() {
           </div>
           <p className="text-sm text-gray-600">{confirmAction?.confirmMessage}</p>
         </div>
+
+        {/* 법정대리인 동의 확인 (투표 시작 시에만 표시) */}
+        {confirmAction?.targetStatus === 'active' && (
+          <div className="mt-4 rounded-lg border border-amber-200 bg-amber-50 p-4">
+            <div className="mb-2 flex items-center gap-2">
+              <FileCheck className="h-4 w-4 text-amber-600" />
+              <span className="text-sm font-semibold text-amber-800">
+                법정대리인 동의 확인 (필수)
+              </span>
+            </div>
+            <p className="mb-3 text-xs leading-relaxed text-amber-700">
+              개인정보보호법 제22조의2에 따라, 만 14세 미만 아동의 개인정보를
+              처리하려면 법정대리인(학부모)의 동의가 필요합니다.
+            </p>
+            <label className="flex cursor-pointer items-start gap-2.5">
+              <input
+                type="checkbox"
+                checked={parentalConsentChecked}
+                onChange={(e) => setParentalConsentChecked(e.target.checked)}
+                className="mt-0.5 h-4 w-4 shrink-0 rounded border-gray-300 text-blue-600 focus:ring-blue-500"
+              />
+              <span className="text-sm font-medium text-gray-800">
+                가정통신문 등을 통해 학부모(법정대리인)에게 개인정보 처리에 대한
+                동의를 받았음을 확인합니다.
+              </span>
+            </label>
+          </div>
+        )}
       </Modal>
     </div>
   );

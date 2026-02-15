@@ -30,6 +30,13 @@ export function Footer() {
             </Link>
             <span className="text-gray-300" aria-hidden="true">|</span>
             <Link
+              href="/terms"
+              className="text-gray-500 transition-colors hover:text-gray-700"
+            >
+              이용약관
+            </Link>
+            <span className="text-gray-300" aria-hidden="true">|</span>
+            <Link
               href="/privacy"
               className="text-gray-500 transition-colors hover:text-gray-700"
             >
