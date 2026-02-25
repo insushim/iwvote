@@ -1,8 +1,8 @@
-'use client';
+"use client";
 
-import { Suspense, useState, useEffect } from 'react';
-import { useSearchParams } from 'next/navigation';
-import toast from 'react-hot-toast';
+import { Suspense, useState, useEffect } from "react";
+import { useSearchParams } from "next/navigation";
+import toast from "react-hot-toast";
 import {
   ArrowLeft,
   ShieldCheck,
@@ -12,35 +12,40 @@ import {
   PlayCircle,
   CheckCircle2,
   XCircle,
-} from 'lucide-react';
-import { Button } from '@/components/ui/Button';
-import { Card } from '@/components/ui/Card';
-import { Badge } from '@/components/ui/Badge';
-import { Spinner } from '@/components/ui/Spinner';
-import { Input } from '@/components/ui/Input';
-import { AuditLog } from '@/components/admin/AuditLog';
-import { useSchoolElection } from '@/hooks/useSchoolElection';
-import { useHashChain } from '@/hooks/useHashChain';
-import { classIdToLabel, formatDate } from '@/lib/utils';
+} from "lucide-react";
+import { Button } from "@/components/ui/Button";
+import { Card } from "@/components/ui/Card";
+import { Badge } from "@/components/ui/Badge";
+import { Spinner } from "@/components/ui/Spinner";
+import { Input } from "@/components/ui/Input";
+import { AuditLog } from "@/components/admin/AuditLog";
+import { useSchoolElection } from "@/hooks/useSchoolElection";
+import { useHashChain } from "@/hooks/useHashChain";
+import { classIdToLabel, formatDate } from "@/lib/utils";
 
 function AuditPageContent() {
   const searchParams = useSearchParams();
-  const electionId = searchParams.get('id') ?? '';
-  const { election, loading: electionLoading, error: electionError, authorized } = useSchoolElection(electionId);
+  const electionId = searchParams.get("id") ?? "";
+  const {
+    election,
+    loading: electionLoading,
+    error: electionError,
+    authorized,
+  } = useSchoolElection(electionId);
   const {
     blocks,
     loading: blocksLoading,
     verifying,
     verified,
-    verificationResults,
-    firstInvalidIndex,
+    blockCount,
+    brokenAt,
     error: chainError,
     fetchBlocks,
     runVerification,
     findByHash,
   } = useHashChain(electionId);
 
-  const [searchHash, setSearchHash] = useState('');
+  const [searchHash, setSearchHash] = useState("");
   const [searchResult, setSearchResult] = useState<{
     found: boolean;
     block?: {
@@ -59,21 +64,22 @@ function AuditPageContent() {
   const handleVerify = async () => {
     await runVerification();
     if (verified === true) {
-      toast.success('해시 체인 검증이 완료되었습니다. 정상입니다.');
+      toast.success("해시 체인 검증이 완료되었습니다. 정상입니다.");
     }
   };
 
   const handleSearch = () => {
     if (!searchHash.trim()) {
-      toast.error('검색할 해시를 입력하세요.');
+      toast.error("검색할 해시를 입력하세요.");
       return;
     }
 
     const block = findByHash(searchHash);
     if (block) {
-      const timestamp = typeof block.timestamp?.toDate === 'function'
-        ? formatDate(block.timestamp, 'yyyy.MM.dd HH:mm:ss')
-        : '-';
+      const timestamp =
+        typeof block.timestamp?.toDate === "function"
+          ? formatDate(block.timestamp, "yyyy.MM.dd HH:mm:ss")
+          : "-";
 
       setSearchResult({
         found: true,
@@ -85,10 +91,10 @@ function AuditPageContent() {
           timestamp,
         },
       });
-      toast.success('투표 기록을 찾았습니다.');
+      toast.success("투표 기록을 찾았습니다.");
     } else {
       setSearchResult({ found: false });
-      toast.error('해당 해시와 일치하는 투표 기록이 없습니다.');
+      toast.error("해당 해시와 일치하는 투표 기록이 없습니다.");
     }
   };
 
@@ -104,7 +110,10 @@ function AuditPageContent() {
     return (
       <div className="flex flex-col items-center justify-center py-20">
         <p className="text-red-500">접근 권한이 없습니다.</p>
-        <a href="/admin/elections/" className="mt-4 text-sm text-blue-600 hover:underline">
+        <a
+          href="/admin/elections/"
+          className="mt-4 text-sm text-blue-600 hover:underline"
+        >
           선거 목록으로 돌아가기
         </a>
       </div>
@@ -114,8 +123,13 @@ function AuditPageContent() {
   if (electionError || !election) {
     return (
       <div className="flex flex-col items-center justify-center py-20">
-        <p className="text-red-500">{electionError || '선거를 찾을 수 없습니다.'}</p>
-        <a href="/admin/elections/" className="mt-4 text-sm text-blue-600 hover:underline">
+        <p className="text-red-500">
+          {electionError || "선거를 찾을 수 없습니다."}
+        </p>
+        <a
+          href="/admin/elections/"
+          className="mt-4 text-sm text-blue-600 hover:underline"
+        >
           선거 목록으로 돌아가기
         </a>
       </div>
@@ -185,12 +199,13 @@ function AuditPageContent() {
               </div>
               <div>
                 <h3 className="font-semibold text-red-800">
-                  {firstInvalidIndex !== null
-                    ? `${firstInvalidIndex}번째 블록에서 무결성 오류 발견`
-                    : '해시 체인 검증에 실패했습니다'}
+                  {brokenAt !== null
+                    ? `${brokenAt}번째 블록에서 무결성 오류 발견`
+                    : "해시 체인 검증에 실패했습니다"}
                 </h3>
                 <p className="text-sm text-red-600">
-                  {chainError || '해시 체인에 변조가 감지되었습니다. 상세 내용을 확인하세요.'}
+                  {chainError ||
+                    "해시 체인에 변조가 감지되었습니다. 상세 내용을 확인하세요."}
                 </p>
               </div>
             </div>
@@ -202,18 +217,31 @@ function AuditPageContent() {
       <div className="grid grid-cols-1 gap-4 sm:grid-cols-3">
         <Card padding="md" className="bg-blue-50">
           <p className="text-sm text-blue-600">전체 블록 수</p>
-          <p className="text-2xl font-bold text-blue-900">{blocks.length}개</p>
+          <p className="text-2xl font-bold text-blue-900">
+            {verified !== null ? blockCount : blocks.length}개
+          </p>
         </Card>
         <Card padding="md" className="bg-green-50">
           <p className="text-sm text-green-600">검증 성공</p>
           <p className="text-2xl font-bold text-green-900">
-            {verificationResults.filter((r) => r.valid).length}개
+            {verified === true
+              ? blockCount
+              : verified === false && brokenAt !== null
+                ? brokenAt
+                : 0}
+            개
           </p>
         </Card>
-        <Card padding="md" className={verified === false ? 'bg-red-50' : 'bg-gray-50'}>
+        <Card
+          padding="md"
+          className={verified === false ? "bg-red-50" : "bg-gray-50"}
+        >
           <p className="text-sm text-red-600">검증 실패</p>
           <p className="text-2xl font-bold text-red-900">
-            {verificationResults.filter((r) => !r.valid).length}개
+            {verified === false && brokenAt !== null
+              ? blockCount - brokenAt
+              : 0}
+            개
           </p>
         </Card>
       </div>
@@ -230,7 +258,7 @@ function AuditPageContent() {
             <Spinner size="md" label="블록 로딩중..." />
           </div>
         ) : (
-          <AuditLog blocks={blocks} verificationResults={verificationResults} />
+          <AuditLog blocks={blocks} brokenAt={brokenAt} verified={verified} />
         )}
       </Card>
 
@@ -238,12 +266,15 @@ function AuditPageContent() {
       <Card
         padding="md"
         header={
-          <h2 className="text-base font-semibold text-gray-900">투표 영수증 해시로 검증</h2>
+          <h2 className="text-base font-semibold text-gray-900">
+            투표 영수증 해시로 검증
+          </h2>
         }
       >
         <div className="space-y-4">
           <p className="text-sm text-gray-500">
-            투표 후 발급받은 영수증 해시를 입력하여 투표가 정상적으로 기록되었는지 확인할 수 있습니다.
+            투표 후 발급받은 영수증 해시를 입력하여 투표가 정상적으로
+            기록되었는지 확인할 수 있습니다.
           </p>
 
           <div className="flex gap-2">
@@ -253,7 +284,7 @@ function AuditPageContent() {
                 value={searchHash}
                 onChange={(e) => setSearchHash(e.target.value)}
                 onKeyDown={(e) => {
-                  if (e.key === 'Enter') handleSearch();
+                  if (e.key === "Enter") handleSearch();
                 }}
               />
             </div>
@@ -284,7 +315,9 @@ function AuditPageContent() {
                       <span className="w-24 shrink-0 font-medium text-gray-600">
                         블록 번호:
                       </span>
-                      <span className="text-gray-900">#{searchResult.block.index}</span>
+                      <span className="text-gray-900">
+                        #{searchResult.block.index}
+                      </span>
                     </div>
                     <div className="flex gap-2">
                       <span className="w-24 shrink-0 font-medium text-gray-600">
@@ -303,14 +336,20 @@ function AuditPageContent() {
                       </code>
                     </div>
                     <div className="flex gap-2">
-                      <span className="w-24 shrink-0 font-medium text-gray-600">반:</span>
+                      <span className="w-24 shrink-0 font-medium text-gray-600">
+                        반:
+                      </span>
                       <span className="text-gray-900">
                         {classIdToLabel(searchResult.block.classId)}
                       </span>
                     </div>
                     <div className="flex gap-2">
-                      <span className="w-24 shrink-0 font-medium text-gray-600">시간:</span>
-                      <span className="text-gray-900">{searchResult.block.timestamp}</span>
+                      <span className="w-24 shrink-0 font-medium text-gray-600">
+                        시간:
+                      </span>
+                      <span className="text-gray-900">
+                        {searchResult.block.timestamp}
+                      </span>
                     </div>
                   </div>
                 </div>
@@ -337,7 +376,13 @@ function AuditPageContent() {
 
 export default function Page() {
   return (
-    <Suspense fallback={<div className="flex items-center justify-center py-20"><Spinner size="lg" label="로딩 중..." /></div>}>
+    <Suspense
+      fallback={
+        <div className="flex items-center justify-center py-20">
+          <Spinner size="lg" label="로딩 중..." />
+        </div>
+      }
+    >
       <AuditPageContent />
     </Suspense>
   );

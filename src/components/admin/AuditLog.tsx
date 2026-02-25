@@ -1,48 +1,52 @@
-'use client';
+"use client";
 
-import { Fragment, useState, useCallback } from 'react';
-import { motion, AnimatePresence } from 'framer-motion';
+import { Fragment, useState, useCallback } from "react";
+import { motion, AnimatePresence } from "framer-motion";
 import {
   CheckCircle2,
   XCircle,
   Copy,
   ChevronDown,
   ChevronUp,
-} from 'lucide-react';
-import toast from 'react-hot-toast';
-import { truncateHash, formatDate } from '@/lib/utils';
-import { Badge } from '@/components/ui/Badge';
-import type { HashBlock } from '@/types';
-
-interface BlockVerification {
-  index: number;
-  valid: boolean;
-  error?: string;
-}
+} from "lucide-react";
+import toast from "react-hot-toast";
+import { truncateHash, formatDate } from "@/lib/utils";
+import { Badge } from "@/components/ui/Badge";
+import type { HashBlock } from "@/types";
 
 interface AuditLogProps {
   blocks: HashBlock[];
-  verificationResults: BlockVerification[];
+  brokenAt: number | null;
+  verified: boolean | null;
 }
 
-export function AuditLog({ blocks, verificationResults }: AuditLogProps) {
+export function AuditLog({ blocks, brokenAt, verified }: AuditLogProps) {
   const [expandedIndex, setExpandedIndex] = useState<number | null>(null);
-
-  const verificationMap = new Map(
-    verificationResults.map((v) => [v.index, v])
-  );
 
   const copyToClipboard = useCallback(async (text: string) => {
     try {
       await navigator.clipboard.writeText(text);
-      toast.success('해시가 클립보드에 복사되었습니다.');
+      toast.success("해시가 클립보드에 복사되었습니다.");
     } catch {
-      toast.error('복사에 실패했습니다.');
+      toast.error("복사에 실패했습니다.");
     }
   }, []);
 
   const toggleExpand = (index: number) => {
     setExpandedIndex((prev) => (prev === index ? null : index));
+  };
+
+  // Determine per-block verification status from server result
+  const getBlockStatus = (
+    blockIndex: number,
+  ): "valid" | "invalid" | "unknown" => {
+    if (verified === null) return "unknown";
+    if (verified === true) return "valid";
+    // verified === false
+    if (brokenAt === null) return "unknown";
+    if (blockIndex < brokenAt) return "valid";
+    if (blockIndex === brokenAt) return "invalid";
+    return "unknown"; // blocks after brokenAt are uncertain
   };
 
   if (blocks.length === 0) {
@@ -58,8 +62,12 @@ export function AuditLog({ blocks, verificationResults }: AuditLogProps) {
       <table className="w-full min-w-[700px] text-sm">
         <thead>
           <tr className="bg-gray-50">
-            <th className="px-3 py-3 text-left font-semibold text-gray-900">블록#</th>
-            <th className="px-3 py-3 text-left font-semibold text-gray-900">타임스탬프</th>
+            <th className="px-3 py-3 text-left font-semibold text-gray-900">
+              블록#
+            </th>
+            <th className="px-3 py-3 text-left font-semibold text-gray-900">
+              타임스탬프
+            </th>
             <th className="px-3 py-3 text-left font-semibold text-gray-900">
               투표해시(앞8자)
             </th>
@@ -69,29 +77,33 @@ export function AuditLog({ blocks, verificationResults }: AuditLogProps) {
             <th className="px-3 py-3 text-left font-semibold text-gray-900">
               블록해시(앞8자)
             </th>
-            <th className="px-3 py-3 text-center font-semibold text-gray-900">검증</th>
-            <th className="px-3 py-3 text-center font-semibold text-gray-900">상세</th>
+            <th className="px-3 py-3 text-center font-semibold text-gray-900">
+              검증
+            </th>
+            <th className="px-3 py-3 text-center font-semibold text-gray-900">
+              상세
+            </th>
           </tr>
         </thead>
         <tbody>
           {blocks.map((block) => {
-            const verification = verificationMap.get(block.index);
+            const status = getBlockStatus(block.index);
             const isExpanded = expandedIndex === block.index;
 
             return (
               <Fragment key={block.id || block.index}>
                 <tr
                   className={`border-t border-gray-100 transition-colors hover:bg-gray-50 ${
-                    verification && !verification.valid ? 'bg-red-50/50' : ''
+                    status === "invalid" ? "bg-red-50/50" : ""
                   }`}
                 >
                   <td className="px-3 py-2.5 font-mono text-xs font-medium text-gray-700">
                     #{block.index}
                   </td>
                   <td className="px-3 py-2.5 text-xs text-gray-600">
-                    {typeof block.timestamp?.toDate === 'function'
-                      ? formatDate(block.timestamp, 'MM.dd HH:mm:ss')
-                      : '-'}
+                    {typeof block.timestamp?.toDate === "function"
+                      ? formatDate(block.timestamp, "MM.dd HH:mm:ss")
+                      : "-"}
                   </td>
                   <td className="px-3 py-2.5">
                     <div className="flex items-center gap-1">
@@ -136,12 +148,10 @@ export function AuditLog({ blocks, verificationResults }: AuditLogProps) {
                     </div>
                   </td>
                   <td className="px-3 py-2.5 text-center">
-                    {verification ? (
-                      verification.valid ? (
-                        <CheckCircle2 className="mx-auto h-5 w-5 text-green-500" />
-                      ) : (
-                        <XCircle className="mx-auto h-5 w-5 text-red-500" />
-                      )
+                    {status === "valid" ? (
+                      <CheckCircle2 className="mx-auto h-5 w-5 text-green-500" />
+                    ) : status === "invalid" ? (
+                      <XCircle className="mx-auto h-5 w-5 text-red-500" />
                     ) : (
                       <span className="text-xs text-gray-400">-</span>
                     )}
@@ -164,10 +174,13 @@ export function AuditLog({ blocks, verificationResults }: AuditLogProps) {
                 <AnimatePresence>
                   {isExpanded && (
                     <tr>
-                      <td colSpan={7} className="border-t border-gray-100 bg-gray-50/80 p-0">
+                      <td
+                        colSpan={7}
+                        className="border-t border-gray-100 bg-gray-50/80 p-0"
+                      >
                         <motion.div
                           initial={{ height: 0, opacity: 0 }}
-                          animate={{ height: 'auto', opacity: 1 }}
+                          animate={{ height: "auto", opacity: 1 }}
                           exit={{ height: 0, opacity: 0 }}
                           transition={{ duration: 0.2 }}
                           className="overflow-hidden"
@@ -189,13 +202,17 @@ export function AuditLog({ blocks, verificationResults }: AuditLogProps) {
                               onCopy={copyToClipboard}
                             />
                             <div className="flex items-center gap-2 text-xs">
-                              <span className="font-medium text-gray-500">반:</span>
-                              <span className="text-gray-700">{block.classId || '-'}</span>
+                              <span className="font-medium text-gray-500">
+                                반:
+                              </span>
+                              <span className="text-gray-700">
+                                {block.classId || "-"}
+                              </span>
                             </div>
-                            {verification && !verification.valid && verification.error && (
+                            {status === "invalid" && (
                               <div className="mt-1">
                                 <Badge variant="error" size="sm">
-                                  {verification.error}
+                                  이 블록에서 무결성 오류가 발견되었습니다
                                 </Badge>
                               </div>
                             )}
@@ -239,4 +256,3 @@ function HashDetail({
     </div>
   );
 }
-

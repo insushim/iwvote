@@ -1,8 +1,8 @@
-'use client';
+"use client";
 
-import { Suspense, useState, useEffect, useMemo } from 'react';
-import { useSearchParams } from 'next/navigation';
-import toast from 'react-hot-toast';
+import { Suspense, useState, useEffect, useMemo } from "react";
+import { useSearchParams } from "next/navigation";
+import toast from "react-hot-toast";
 import {
   ArrowLeft,
   Download,
@@ -11,7 +11,7 @@ import {
   ShieldAlert,
   CheckCircle2,
   Lock,
-} from 'lucide-react';
+} from "lucide-react";
 import {
   BarChart,
   Bar,
@@ -21,32 +21,34 @@ import {
   Tooltip,
   ResponsiveContainer,
   Cell,
-} from 'recharts';
-import { httpsCallable } from 'firebase/functions';
-import { Button } from '@/components/ui/Button';
-import { Card } from '@/components/ui/Card';
-import { Badge } from '@/components/ui/Badge';
-import { Spinner } from '@/components/ui/Spinner';
-import { Modal } from '@/components/ui/Modal';
-import { ResultChart } from '@/components/admin/ResultChart';
-import { ClassResultTable } from '@/components/admin/ClassResultTable';
-import { useSchoolElection } from '@/hooks/useSchoolElection';
-import { useHashChain } from '@/hooks/useHashChain';
-import { updateElection } from '@/lib/firestore';
-import { functions } from '@/lib/firebase';
-import { CHART_COLORS } from '@/constants';
-import type { ElectionResult } from '@/types';
+} from "recharts";
+import { httpsCallable } from "firebase/functions";
+import { Button } from "@/components/ui/Button";
+import { Card } from "@/components/ui/Card";
+import { Badge } from "@/components/ui/Badge";
+import { Spinner } from "@/components/ui/Spinner";
+import { Modal } from "@/components/ui/Modal";
+import { ResultChart } from "@/components/admin/ResultChart";
+import { ClassResultTable } from "@/components/admin/ClassResultTable";
+import { useSchoolElection } from "@/hooks/useSchoolElection";
+import { useHashChain } from "@/hooks/useHashChain";
+import { updateElection } from "@/lib/firestore";
+import { functions } from "@/lib/firebase";
+import { CHART_COLORS } from "@/constants";
+import type { ElectionResult } from "@/types";
 
 function ResultsPageContent() {
   const searchParams = useSearchParams();
-  const electionId = searchParams.get('id') ?? '';
-  const { election, loading: electionLoading, error: electionError, refetch, authorized } = useSchoolElection(electionId);
+  const electionId = searchParams.get("id") ?? "";
   const {
-    verified,
-    verifying,
-    runVerification,
-    fetchBlocks,
-  } = useHashChain(electionId);
+    election,
+    loading: electionLoading,
+    error: electionError,
+    refetch,
+    authorized,
+  } = useSchoolElection(electionId);
+  const { verified, verifying, runVerification, fetchBlocks } =
+    useHashChain(electionId);
 
   const [results, setResults] = useState<ElectionResult | null>(null);
   const [resultsLoading, setResultsLoading] = useState(true);
@@ -54,24 +56,30 @@ function ResultsPageContent() {
   const [finalizing, setFinalizing] = useState(false);
 
   // Fetch results from Cloud Function (decryption happens server-side)
+  const electionReady =
+    !!election &&
+    (election.status === "closed" || election.status === "finalized");
   useEffect(() => {
-    if (!election || !electionId) return;
+    if (!electionReady || !electionId) return;
 
     let cancelled = false;
     setResultsLoading(true);
 
     const fetchResults = async () => {
       try {
-        const getResultsFn = httpsCallable<{ electionId: string }, ElectionResult>(
-          functions,
-          'getElectionResults'
-        );
+        const getResultsFn = httpsCallable<
+          { electionId: string },
+          ElectionResult
+        >(functions, "getElectionResults");
         const result = await getResultsFn({ electionId });
         if (!cancelled) setResults(result.data);
       } catch (err) {
-        console.error('Failed to fetch results:', err);
+        console.error("Failed to fetch results:", err);
         if (!cancelled) {
-          const message = err instanceof Error ? err.message : '결과를 불러오는데 실패했습니다.';
+          const message =
+            err instanceof Error
+              ? err.message
+              : "결과를 불러오는데 실패했습니다.";
           toast.error(message);
         }
       } finally {
@@ -82,19 +90,22 @@ function ResultsPageContent() {
     fetchResults();
     fetchBlocks();
 
-    return () => { cancelled = true; };
-  // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [electionId]);
+    return () => {
+      cancelled = true;
+    };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [electionId, electionReady]);
 
   const handleFinalize = async () => {
     setFinalizing(true);
     try {
-      await updateElection(electionId, { status: 'finalized' });
-      toast.success('선거 결과가 확정되었습니다.');
+      await updateElection(electionId, { status: "finalized" });
+      toast.success("선거 결과가 확정되었습니다.");
       setShowFinalizeModal(false);
       refetch();
     } catch (err) {
-      const message = err instanceof Error ? err.message : '결과 확정에 실패했습니다.';
+      const message =
+        err instanceof Error ? err.message : "결과 확정에 실패했습니다.";
       toast.error(message);
     } finally {
       setFinalizing(false);
@@ -129,7 +140,10 @@ function ResultsPageContent() {
     return (
       <div className="flex flex-col items-center justify-center py-20">
         <p className="text-red-500">접근 권한이 없습니다.</p>
-        <a href="/admin/elections/" className="mt-4 text-sm text-blue-600 hover:underline">
+        <a
+          href="/admin/elections/"
+          className="mt-4 text-sm text-blue-600 hover:underline"
+        >
           선거 목록으로 돌아가기
         </a>
       </div>
@@ -139,8 +153,13 @@ function ResultsPageContent() {
   if (electionError || !election) {
     return (
       <div className="flex flex-col items-center justify-center py-20">
-        <p className="text-red-500">{electionError || '선거를 찾을 수 없습니다.'}</p>
-        <a href="/admin/elections/" className="mt-4 text-sm text-blue-600 hover:underline">
+        <p className="text-red-500">
+          {electionError || "선거를 찾을 수 없습니다."}
+        </p>
+        <a
+          href="/admin/elections/"
+          className="mt-4 text-sm text-blue-600 hover:underline"
+        >
           선거 목록으로 돌아가기
         </a>
       </div>
@@ -148,11 +167,13 @@ function ResultsPageContent() {
   }
 
   // Only accessible when closed or finalized
-  if (election.status !== 'closed' && election.status !== 'finalized') {
+  if (election.status !== "closed" && election.status !== "finalized") {
     return (
       <div className="flex flex-col items-center justify-center py-20">
         <Lock className="h-12 w-12 text-gray-300" />
-        <p className="mt-4 text-gray-500">투표가 종료된 후에 결과를 확인할 수 있습니다.</p>
+        <p className="mt-4 text-gray-500">
+          투표가 종료된 후에 결과를 확인할 수 있습니다.
+        </p>
         <a
           href={`/admin/elections/detail/?id=${electionId}`}
           className="mt-4 text-sm text-blue-600 hover:underline"
@@ -163,7 +184,7 @@ function ResultsPageContent() {
     );
   }
 
-  const isFinalized = election.status === 'finalized';
+  const isFinalized = election.status === "finalized";
 
   return (
     <div className="space-y-6 print:space-y-4">
@@ -239,7 +260,9 @@ function ResultsPageContent() {
 
       {/* Print header */}
       <div className="hidden print:block">
-        <h1 className="text-center text-2xl font-bold">{election.title} - 선거 결과</h1>
+        <h1 className="text-center text-2xl font-bold">
+          {election.title} - 선거 결과
+        </h1>
       </div>
 
       {resultsLoading ? (
@@ -252,11 +275,15 @@ function ResultsPageContent() {
           <div className="grid grid-cols-2 gap-4 sm:grid-cols-4">
             <Card padding="md" className="bg-blue-50">
               <p className="text-xs text-blue-600">총 투표수</p>
-              <p className="text-2xl font-bold text-blue-900">{results.totalVotes}</p>
+              <p className="text-2xl font-bold text-blue-900">
+                {results.totalVotes}
+              </p>
             </Card>
             <Card padding="md" className="bg-green-50">
               <p className="text-xs text-green-600">투표율</p>
-              <p className="text-2xl font-bold text-green-900">{results.turnout.toFixed(1)}%</p>
+              <p className="text-2xl font-bold text-green-900">
+                {results.turnout.toFixed(1)}%
+              </p>
             </Card>
             <Card padding="md" className="bg-purple-50">
               <p className="text-xs text-purple-600">유효 투표</p>
@@ -266,7 +293,9 @@ function ResultsPageContent() {
             </Card>
             <Card padding="md" className="bg-gray-50">
               <p className="text-xs text-gray-600">기권</p>
-              <p className="text-2xl font-bold text-gray-900">{results.abstentions}</p>
+              <p className="text-2xl font-bold text-gray-900">
+                {results.abstentions}
+              </p>
             </Card>
           </div>
 
@@ -276,7 +305,9 @@ function ResultsPageContent() {
             <Card
               padding="md"
               header={
-                <h2 className="text-base font-semibold text-gray-900">득표율 (도넛 차트)</h2>
+                <h2 className="text-base font-semibold text-gray-900">
+                  득표율 (도넛 차트)
+                </h2>
               }
             >
               <ResultChart results={results.candidates} />
@@ -286,12 +317,18 @@ function ResultsPageContent() {
             <Card
               padding="md"
               header={
-                <h2 className="text-base font-semibold text-gray-900">후보별 득표수 (막대 차트)</h2>
+                <h2 className="text-base font-semibold text-gray-900">
+                  후보별 득표수 (막대 차트)
+                </h2>
               }
             >
               <div className="h-80">
                 <ResponsiveContainer width="100%" height="100%">
-                  <BarChart data={barData} layout="vertical" margin={{ left: 20 }}>
+                  <BarChart
+                    data={barData}
+                    layout="vertical"
+                    margin={{ left: 20 }}
+                  >
                     <CartesianGrid strokeDasharray="3 3" horizontal={false} />
                     <XAxis type="number" />
                     <YAxis
@@ -303,10 +340,14 @@ function ResultsPageContent() {
                     <Tooltip
                       formatter={(value: number | undefined) => [
                         `${value ?? 0}표`,
-                        '득표',
+                        "득표",
                       ]}
                     />
-                    <Bar dataKey="votes" radius={[0, 4, 4, 0]} animationDuration={800}>
+                    <Bar
+                      dataKey="votes"
+                      radius={[0, 4, 4, 0]}
+                      animationDuration={800}
+                    >
                       {barData.map((_, index) => (
                         <Cell
                           key={`bar-${index}`}
@@ -324,10 +365,15 @@ function ResultsPageContent() {
           <Card
             padding="md"
             header={
-              <h2 className="text-base font-semibold text-gray-900">반별 결과</h2>
+              <h2 className="text-base font-semibold text-gray-900">
+                반별 결과
+              </h2>
             }
           >
-            <ClassResultTable results={results} candidates={election.candidates} />
+            <ClassResultTable
+              results={results}
+              candidates={election.candidates}
+            />
           </Card>
         </>
       ) : (
@@ -346,13 +392,15 @@ function ResultsPageContent() {
       >
         <div className="space-y-4">
           <p className="text-sm text-gray-600">
-            선거 결과를 확정하시겠습니까? 확정 후에는 결과가 공식적으로 기록됩니다.
+            선거 결과를 확정하시겠습니까? 확정 후에는 결과가 공식적으로
+            기록됩니다.
           </p>
 
           {verified === false && (
             <div className="rounded-lg bg-red-50 p-3">
               <p className="text-sm text-red-700">
-                해시 체인 검증에서 오류가 발견되었습니다. 결과를 확정하기 전에 무결성을 확인해주세요.
+                해시 체인 검증에서 오류가 발견되었습니다. 결과를 확정하기 전에
+                무결성을 확인해주세요.
               </p>
             </div>
           )}
@@ -381,7 +429,13 @@ function ResultsPageContent() {
 
 export default function Page() {
   return (
-    <Suspense fallback={<div className="flex items-center justify-center py-20"><Spinner size="lg" label="로딩 중..." /></div>}>
+    <Suspense
+      fallback={
+        <div className="flex items-center justify-center py-20">
+          <Spinner size="lg" label="로딩 중..." />
+        </div>
+      }
+    >
       <ResultsPageContent />
     </Suspense>
   );

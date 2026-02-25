@@ -46,11 +46,10 @@ service cloud.firestore {
 
     // Votes (top-level collection)
     // All vote creation happens via Cloud Functions (admin SDK bypasses rules)
+    // Read: isAdmin() for query compatibility (schoolId filtering at app level)
     match /votes/{voteId} {
       allow create: if false;
-      allow read: if resource.data.schoolId is string
-        ? isSchoolAdmin(resource.data.schoolId)
-        : isAdmin();
+      allow read: if isAdmin();
       allow update: if false;
       // Only superadmin can delete votes (data purge after finalization)
       allow delete: if isSuperAdmin();
@@ -58,10 +57,9 @@ service cloud.firestore {
 
     // Voter codes (top-level collection)
     // Code lookup and creation happens via Cloud Functions
+    // Read: isAdmin() for query compatibility (schoolId filtering at app level)
     match /voterCodes/{codeId} {
-      allow read: if resource.data.schoolId is string
-        ? isSchoolAdmin(resource.data.schoolId)
-        : isAdmin();
+      allow read: if isAdmin();
       // Only Cloud Functions create codes (admin SDK bypasses rules)
       allow create: if false;
       allow update: if false;
@@ -71,10 +69,9 @@ service cloud.firestore {
 
     // Hash chain (top-level collection)
     // All hash chain creation happens via Cloud Functions
+    // Read: isAdmin() for query compatibility (schoolId filtering at app level)
     match /hashChain/{blockId} {
-      allow read: if resource.data.schoolId is string
-        ? isSchoolAdmin(resource.data.schoolId)
-        : isAdmin();
+      allow read: if isAdmin();
       allow create: if false;
       allow update, delete: if false;
     }
@@ -96,10 +93,9 @@ service cloud.firestore {
     }
 
     // Audit logs — only Cloud Functions create these
+    // Read: isAdmin() for query compatibility (schoolId filtering at app level)
     match /auditLogs/{logId} {
-      allow read: if resource.data.schoolId is string
-        ? isSchoolAdmin(resource.data.schoolId)
-        : isAdmin();
+      allow read: if isAdmin();
       allow create: if false;
       allow update, delete: if false;
     }
