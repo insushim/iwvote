@@ -15,9 +15,9 @@ import {
   deleteDoc,
   arrayUnion,
   type QueryConstraint,
-} from 'firebase/firestore';
-import { db } from '@/lib/firebase';
-import { COLLECTIONS } from '@/constants';
+} from "firebase/firestore";
+import { db } from "@/lib/firebase";
+import { COLLECTIONS } from "@/constants";
 import type {
   School,
   Election,
@@ -27,7 +27,7 @@ import type {
   AuditLog,
   UserProfile,
   UserRole,
-} from '@/types';
+} from "@/types";
 
 // ============================================================
 // Utilities
@@ -37,8 +37,8 @@ import type {
  * Generate a random 8-character join code using alphanumeric charset.
  */
 export function generateJoinCode(): string {
-  const charset = 'ABCDEFGHJKMNPQRSTUVWXYZ23456789';
-  let code = '';
+  const charset = "ABCDEFGHJKMNPQRSTUVWXYZ23456789";
+  let code = "";
   const array = new Uint8Array(8);
   crypto.getRandomValues(array);
   for (let i = 0; i < 8; i++) {
@@ -56,7 +56,7 @@ export function generateJoinCode(): string {
  */
 export async function createUserProfile(
   uid: string,
-  data: Omit<UserProfile, 'id' | 'createdAt' | 'approvedAt' | 'approvedBy'>
+  data: Omit<UserProfile, "id" | "createdAt" | "approvedAt" | "approvedBy">,
 ): Promise<void> {
   await setDoc(doc(db, COLLECTIONS.USERS, uid), {
     ...data,
@@ -81,8 +81,8 @@ export async function getUserProfile(uid: string): Promise<UserProfile | null> {
 export async function hasSuperAdmin(): Promise<boolean> {
   const q = query(
     collection(db, COLLECTIONS.USERS),
-    where('role', '==', 'superadmin'),
-    limit(1)
+    where("role", "==", "superadmin"),
+    limit(1),
   );
   const snapshot = await getDocs(q);
   return !snapshot.empty;
@@ -91,15 +91,18 @@ export async function hasSuperAdmin(): Promise<boolean> {
 /**
  * Get all users, optionally filtered by role and/or schoolId.
  */
-export async function getUsers(role?: UserRole, schoolId?: string): Promise<UserProfile[]> {
+export async function getUsers(
+  role?: UserRole,
+  schoolId?: string,
+): Promise<UserProfile[]> {
   const constraints: QueryConstraint[] = [];
   if (role) {
-    constraints.push(where('role', '==', role));
+    constraints.push(where("role", "==", role));
   }
   if (schoolId) {
-    constraints.push(where('schoolId', '==', schoolId));
+    constraints.push(where("schoolId", "==", schoolId));
   }
-  constraints.push(orderBy('createdAt', 'desc'));
+  constraints.push(orderBy("createdAt", "desc"));
 
   const q = query(collection(db, COLLECTIONS.USERS), ...constraints);
   const snapshot = await getDocs(q);
@@ -109,9 +112,12 @@ export async function getUsers(role?: UserRole, schoolId?: string): Promise<User
 /**
  * Approve a pending user (set role to admin).
  */
-export async function approveUser(uid: string, approverUid: string): Promise<void> {
+export async function approveUser(
+  uid: string,
+  approverUid: string,
+): Promise<void> {
   await updateDoc(doc(db, COLLECTIONS.USERS, uid), {
-    role: 'admin',
+    role: "admin",
     approved: true,
     approvedAt: serverTimestamp(),
     approvedBy: approverUid,
@@ -128,7 +134,10 @@ export async function rejectUser(uid: string): Promise<void> {
 /**
  * Update user role.
  */
-export async function updateUserRole(uid: string, role: UserRole): Promise<void> {
+export async function updateUserRole(
+  uid: string,
+  role: UserRole,
+): Promise<void> {
   await updateDoc(doc(db, COLLECTIONS.USERS, uid), { role });
 }
 
@@ -151,7 +160,10 @@ export async function getSchool(schoolId: string): Promise<School | null> {
  */
 export async function createSchoolWithId(
   schoolId: string,
-  data: Omit<School, 'id' | 'createdAt' | 'updatedAt' | 'joinCode' | 'joinCodeExpiresAt'>
+  data: Omit<
+    School,
+    "id" | "createdAt" | "updatedAt" | "joinCode" | "joinCodeExpiresAt"
+  >,
 ): Promise<void> {
   await setDoc(doc(db, COLLECTIONS.SCHOOLS, schoolId), {
     ...data,
@@ -166,7 +178,10 @@ export async function createSchoolWithId(
  * Create a new school document with auto-generated ID.
  */
 export async function createSchool(
-  data: Omit<School, 'id' | 'createdAt' | 'updatedAt' | 'joinCode' | 'joinCodeExpiresAt'>
+  data: Omit<
+    School,
+    "id" | "createdAt" | "updatedAt" | "joinCode" | "joinCodeExpiresAt"
+  >,
 ): Promise<string> {
   const docRef = await addDoc(collection(db, COLLECTIONS.SCHOOLS), {
     ...data,
@@ -183,7 +198,7 @@ export async function createSchool(
  */
 export async function saveSchool(
   schoolId: string,
-  data: Partial<Omit<School, 'id' | 'createdAt'>>
+  data: Partial<Omit<School, "id" | "createdAt">>,
 ): Promise<void> {
   const docRef = doc(db, COLLECTIONS.SCHOOLS, schoolId);
   const docSnap = await getDoc(docRef);
@@ -195,7 +210,7 @@ export async function saveSchool(
     });
   } else {
     await setDoc(docRef, {
-      name: '',
+      name: "",
       grades: [],
       classesPerGrade: {},
       studentsPerClass: {},
@@ -214,7 +229,7 @@ export async function saveSchool(
  */
 export async function updateSchool(
   schoolId: string,
-  data: Partial<Omit<School, 'id' | 'createdAt'>>
+  data: Partial<Omit<School, "id" | "createdAt">>,
 ): Promise<void> {
   const docRef = doc(db, COLLECTIONS.SCHOOLS, schoolId);
   await updateDoc(docRef, {
@@ -238,7 +253,10 @@ export async function regenerateJoinCode(schoolId: string): Promise<string> {
 /**
  * Add a user UID to a school's adminIds array.
  */
-export async function addAdminToSchool(schoolId: string, uid: string): Promise<void> {
+export async function addAdminToSchool(
+  schoolId: string,
+  uid: string,
+): Promise<void> {
   await updateDoc(doc(db, COLLECTIONS.SCHOOLS, schoolId), {
     adminIds: arrayUnion(uid),
     updatedAt: serverTimestamp(),
@@ -255,8 +273,8 @@ export async function addAdminToSchool(schoolId: string, uid: string): Promise<v
 export async function getElections(schoolId: string): Promise<Election[]> {
   const q = query(
     collection(db, COLLECTIONS.ELECTIONS),
-    where('schoolId', '==', schoolId),
-    orderBy('createdAt', 'desc')
+    where("schoolId", "==", schoolId),
+    orderBy("createdAt", "desc"),
   );
   const snapshot = await getDocs(q);
   return snapshot.docs.map((d) => ({ id: d.id, ...d.data() }) as Election);
@@ -265,7 +283,9 @@ export async function getElections(schoolId: string): Promise<Election[]> {
 /**
  * Get a single election by its document ID.
  */
-export async function getElection(electionId: string): Promise<Election | null> {
+export async function getElection(
+  electionId: string,
+): Promise<Election | null> {
   const docRef = doc(db, COLLECTIONS.ELECTIONS, electionId);
   const docSnap = await getDoc(docRef);
   if (!docSnap.exists()) return null;
@@ -276,7 +296,7 @@ export async function getElection(electionId: string): Promise<Election | null> 
  * Create a new election document.
  */
 export async function createElection(
-  data: Omit<Election, 'id' | 'createdAt' | 'updatedAt'>
+  data: Omit<Election, "id" | "createdAt" | "updatedAt">,
 ): Promise<string> {
   const docRef = await addDoc(collection(db, COLLECTIONS.ELECTIONS), {
     ...data,
@@ -291,7 +311,7 @@ export async function createElection(
  */
 export async function updateElection(
   electionId: string,
-  data: Partial<Omit<Election, 'id' | 'createdAt'>>
+  data: Partial<Omit<Election, "id" | "createdAt">>,
 ): Promise<void> {
   const docRef = doc(db, COLLECTIONS.ELECTIONS, electionId);
   await updateDoc(docRef, {
@@ -306,7 +326,7 @@ export async function updateElection(
  */
 export async function updateElectionStatus(
   electionId: string,
-  status: ElectionStatus
+  status: ElectionStatus,
 ): Promise<void> {
   const docRef = doc(db, COLLECTIONS.ELECTIONS, electionId);
   const updateData: Record<string, unknown> = {
@@ -314,9 +334,9 @@ export async function updateElectionStatus(
     updatedAt: serverTimestamp(),
   };
 
-  if (status === 'active') {
+  if (status === "active") {
     updateData.startTime = serverTimestamp();
-  } else if (status === 'closed' || status === 'finalized') {
+  } else if (status === "closed" || status === "finalized") {
     updateData.endTime = serverTimestamp();
   }
 
@@ -332,10 +352,10 @@ export async function updateElectionStatus(
  */
 export async function addCandidate(
   electionId: string,
-  candidate: Omit<import('@/types').Candidate, 'id'>
+  candidate: Omit<import("@/types").Candidate, "id">,
 ): Promise<void> {
   const election = await getElection(electionId);
-  if (!election) throw new Error('선거를 찾을 수 없습니다.');
+  if (!election) throw new Error("선거를 찾을 수 없습니다.");
 
   const newCandidate = {
     ...candidate,
@@ -353,13 +373,13 @@ export async function addCandidate(
 export async function updateCandidate(
   electionId: string,
   candidateId: string,
-  data: Partial<Omit<import('@/types').Candidate, 'id'>>
+  data: Partial<Omit<import("@/types").Candidate, "id">>,
 ): Promise<void> {
   const election = await getElection(electionId);
-  if (!election) throw new Error('선거를 찾을 수 없습니다.');
+  if (!election) throw new Error("선거를 찾을 수 없습니다.");
 
   const candidates = election.candidates.map((c) =>
-    c.id === candidateId ? { ...c, ...data } : c
+    c.id === candidateId ? { ...c, ...data } : c,
   );
 
   await updateElection(electionId, { candidates });
@@ -370,10 +390,10 @@ export async function updateCandidate(
  */
 export async function removeCandidate(
   electionId: string,
-  candidateId: string
+  candidateId: string,
 ): Promise<void> {
   const election = await getElection(electionId);
-  if (!election) throw new Error('선거를 찾을 수 없습니다.');
+  if (!election) throw new Error("선거를 찾을 수 없습니다.");
 
   const candidates = election.candidates
     .filter((c) => c.id !== candidateId)
@@ -391,17 +411,17 @@ export async function removeCandidate(
  */
 export async function getVoterCodes(
   classId: string,
-  constraints?: QueryConstraint[]
+  constraints?: QueryConstraint[],
 ): Promise<VoterCode[]> {
   const baseConstraints: QueryConstraint[] = [
-    where('classId', '==', classId),
-    orderBy('studentNumber', 'asc'),
+    where("classId", "==", classId),
+    orderBy("studentNumber", "asc"),
   ];
 
   const q = query(
     collection(db, COLLECTIONS.VOTER_CODES),
     ...baseConstraints,
-    ...(constraints ?? [])
+    ...(constraints ?? []),
   );
   const snapshot = await getDocs(q);
   return snapshot.docs.map((d) => ({ id: d.id, ...d.data() }) as VoterCode);
@@ -412,14 +432,14 @@ export async function getVoterCodes(
  */
 export async function getVoterCodesByElection(
   electionId: string,
-  classId?: string
+  classId?: string,
 ): Promise<VoterCode[]> {
   const constraints: QueryConstraint[] = [
-    where('electionId', '==', electionId),
-    orderBy('studentNumber', 'asc'),
+    where("electionId", "==", electionId),
+    orderBy("studentNumber", "asc"),
   ];
   if (classId) {
-    constraints.splice(1, 0, where('classId', '==', classId));
+    constraints.splice(1, 0, where("classId", "==", classId));
   }
 
   const q = query(collection(db, COLLECTIONS.VOTER_CODES), ...constraints);
@@ -431,7 +451,7 @@ export async function getVoterCodesByElection(
  * Get voter code statistics grouped by classId for an election.
  */
 export async function getVoterCodeStats(
-  electionId: string
+  electionId: string,
 ): Promise<Record<string, { total: number; used: number }>> {
   const codes = await getVoterCodesByElection(electionId);
   const stats: Record<string, { total: number; used: number }> = {};
@@ -457,8 +477,8 @@ export async function getVoterCodeStats(
 export async function getChain(electionId: string): Promise<HashBlock[]> {
   const q = query(
     collection(db, COLLECTIONS.HASH_CHAIN),
-    where('electionId', '==', electionId),
-    orderBy('index', 'asc')
+    where("electionId", "==", electionId),
+    orderBy("index", "asc"),
   );
   const snapshot = await getDocs(q);
   return snapshot.docs.map((d) => ({ id: d.id, ...d.data() }) as HashBlock);
@@ -467,12 +487,14 @@ export async function getChain(electionId: string): Promise<HashBlock[]> {
 /**
  * Get the latest (most recent) block in the hash chain.
  */
-export async function getLatestBlock(electionId: string): Promise<HashBlock | null> {
+export async function getLatestBlock(
+  electionId: string,
+): Promise<HashBlock | null> {
   const q = query(
     collection(db, COLLECTIONS.HASH_CHAIN),
-    where('electionId', '==', electionId),
-    orderBy('index', 'desc'),
-    limit(1)
+    where("electionId", "==", electionId),
+    orderBy("index", "desc"),
+    limit(1),
   );
   const snapshot = await getDocs(q);
 
@@ -490,15 +512,20 @@ export async function getLatestBlock(electionId: string): Promise<HashBlock | nu
  */
 export async function getAuditLogs(
   electionId?: string,
-  maxResults?: number
+  maxResults?: number,
+  schoolId?: string,
 ): Promise<AuditLog[]> {
   const constraints: QueryConstraint[] = [];
 
   if (electionId) {
-    constraints.push(where('electionId', '==', electionId));
+    constraints.push(where("electionId", "==", electionId));
   }
 
-  constraints.push(orderBy('timestamp', 'desc'));
+  if (schoolId) {
+    constraints.push(where("schoolId", "==", schoolId));
+  }
+
+  constraints.push(orderBy("timestamp", "desc"));
 
   if (maxResults) {
     constraints.push(limit(maxResults));
@@ -518,12 +545,14 @@ export async function getAuditLogs(
  * Deletes voter codes and votes, keeping only anonymized hash chain and audit logs.
  * Must only be called on finalized elections.
  */
-export async function purgeElectionData(electionId: string): Promise<{ deletedVotes: number; deletedCodes: number }> {
+export async function purgeElectionData(
+  electionId: string,
+): Promise<{ deletedVotes: number; deletedCodes: number }> {
   // Verify election is finalized
   const election = await getElection(electionId);
-  if (!election) throw new Error('선거를 찾을 수 없습니다.');
-  if (election.status !== 'finalized') {
-    throw new Error('결과가 확정된 선거만 데이터를 파기할 수 있습니다.');
+  if (!election) throw new Error("선거를 찾을 수 없습니다.");
+  if (election.status !== "finalized") {
+    throw new Error("결과가 확정된 선거만 데이터를 파기할 수 있습니다.");
   }
 
   let deletedVotes = 0;
@@ -532,7 +561,7 @@ export async function purgeElectionData(electionId: string): Promise<{ deletedVo
   // Delete all voter codes for this election
   const codesQuery = query(
     collection(db, COLLECTIONS.VOTER_CODES),
-    where('electionId', '==', electionId)
+    where("electionId", "==", electionId),
   );
   const codesSnap = await getDocs(codesQuery);
   for (const d of codesSnap.docs) {
@@ -543,7 +572,7 @@ export async function purgeElectionData(electionId: string): Promise<{ deletedVo
   // Delete all votes for this election
   const votesQuery = query(
     collection(db, COLLECTIONS.VOTES),
-    where('electionId', '==', electionId)
+    where("electionId", "==", electionId),
   );
   const votesSnap = await getDocs(votesQuery);
   for (const d of votesSnap.docs) {
@@ -554,7 +583,7 @@ export async function purgeElectionData(electionId: string): Promise<{ deletedVo
   // Clear candidate photos from election doc (data URLs)
   const candidatesWithoutPhotos = election.candidates.map((c) => ({
     ...c,
-    photoURL: '',
+    photoURL: "",
   }));
   await updateElection(electionId, {
     candidates: candidatesWithoutPhotos,
@@ -582,8 +611,9 @@ export async function getTodayVoteCount(schoolId: string): Promise<number> {
   for (const election of elections) {
     const q = query(
       collection(db, COLLECTIONS.VOTES),
-      where('electionId', '==', election.id),
-      where('timestamp', '>=', startOfDay)
+      where("electionId", "==", election.id),
+      where("schoolId", "==", schoolId),
+      where("timestamp", ">=", startOfDay),
     );
     const snapshot = await getDocs(q);
     total += snapshot.size;
