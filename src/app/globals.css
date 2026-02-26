@@ -391,8 +391,8 @@ body {
     margin: 10mm;
   }
 
-  /* Hide everything except printable content */
-  body * {
+  /* Hide everything except printable content (only when .print-area exists, e.g. code printing) */
+  body:has(.print-area) * {
     visibility: hidden;
   }
 

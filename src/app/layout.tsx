@@ -1,29 +1,45 @@
-import type { Metadata, Viewport } from 'next';
-import { Toaster } from 'react-hot-toast';
-import './globals.css';
+import type { Metadata, Viewport } from "next";
+import { Toaster } from "react-hot-toast";
+import "./globals.css";
 
 export const metadata: Metadata = {
-  title: '우리한표 - 초등학교 전자투표',
+  title: "우리한표 - 초등학교 전자투표",
   description:
-    '우리한표는 초등학교 학생회장 선거를 위한 안전하고 투명한 전자투표 시스템입니다. 해시 체인 기술로 투표의 무결성을 보장합니다.',
-  manifest: '/manifest.json',
+    "우리한표는 초등학교 학생회장 선거를 위한 안전하고 투명한 전자투표 시스템입니다. 해시 체인 기술로 투표의 무결성을 보장합니다.",
+  manifest: "/manifest.json",
   appleWebApp: {
     capable: true,
-    statusBarStyle: 'default',
-    title: '우리한표',
+    statusBarStyle: "default",
+    title: "우리한표",
   },
   icons: {
-    icon: '/favicon.ico',
-    apple: '/apple-touch-icon.png',
+    icon: [
+      { url: "/icons/icon-32x32.png", sizes: "32x32", type: "image/png" },
+      { url: "/icons/icon-192x192.png", sizes: "192x192", type: "image/png" },
+      { url: "/icons/icon-512x512.png", sizes: "512x512", type: "image/png" },
+    ],
+    shortcut: "/favicon.ico",
+    apple: [
+      { url: "/apple-touch-icon.png", sizes: "180x180", type: "image/png" },
+      { url: "/icons/icon-152x152.png", sizes: "152x152", type: "image/png" },
+      { url: "/icons/icon-167x167.png", sizes: "167x167", type: "image/png" },
+    ],
+  },
+  openGraph: {
+    title: "우리한표 - 초등학교 전자투표",
+    description: "소중한 한 표, 투명한 결과 - 해시 체인 기반 전자투표 시스템",
+    images: [{ url: "/og-image.png", width: 1200, height: 630 }],
+    locale: "ko_KR",
+    type: "website",
   },
 };
 
 export const viewport: Viewport = {
-  width: 'device-width',
+  width: "device-width",
   initialScale: 1,
   maximumScale: 1,
   userScalable: false,
-  themeColor: '#38bdf8',
+  themeColor: "#3B82F6",
 };
 
 export default function RootLayout({
@@ -44,30 +60,28 @@ export default function RootLayout({
         <meta name="apple-mobile-web-app-capable" content="yes" />
         <meta name="application-name" content="우리한표" />
       </head>
-      <body
-        className="font-[Pretendard_Variable,Pretendard,-apple-system,BlinkMacSystemFont,system-ui,Roboto,Helvetica_Neue,Segoe_UI,Apple_SD_Gothic_Neo,Noto_Sans_KR,Malgun_Gothic,Apple_Color_Emoji,Segoe_UI_Emoji,Segoe_UI_Symbol,sans-serif] antialiased"
-      >
+      <body className="font-[Pretendard_Variable,Pretendard,-apple-system,BlinkMacSystemFont,system-ui,Roboto,Helvetica_Neue,Segoe_UI,Apple_SD_Gothic_Neo,Noto_Sans_KR,Malgun_Gothic,Apple_Color_Emoji,Segoe_UI_Emoji,Segoe_UI_Symbol,sans-serif] antialiased">
         {children}
         <Toaster
           position="top-center"
           toastOptions={{
             duration: 3000,
             style: {
-              borderRadius: '12px',
-              padding: '12px 16px',
-              fontSize: '14px',
-              fontWeight: '500',
+              borderRadius: "12px",
+              padding: "12px 16px",
+              fontSize: "14px",
+              fontWeight: "500",
             },
             success: {
               iconTheme: {
-                primary: '#22c55e',
-                secondary: '#fff',
+                primary: "#22c55e",
+                secondary: "#fff",
               },
             },
             error: {
               iconTheme: {
-                primary: '#ef4444',
-                secondary: '#fff',
+                primary: "#ef4444",
+                secondary: "#fff",
               },
             },
           }}

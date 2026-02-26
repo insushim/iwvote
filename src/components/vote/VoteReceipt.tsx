@@ -1,12 +1,12 @@
-'use client';
+"use client";
 
-import { useState } from 'react';
-import { format } from 'date-fns';
-import { ko } from 'date-fns/locale';
-import { Copy, CheckCheck, Shield } from 'lucide-react';
-import { motion } from 'framer-motion';
-import toast from 'react-hot-toast';
-import type { VoteReceipt as VoteReceiptType } from '@/types';
+import { useState } from "react";
+import { format } from "date-fns";
+import { ko } from "date-fns/locale";
+import { Copy, CheckCheck, Shield } from "lucide-react";
+import { motion } from "framer-motion";
+import toast from "react-hot-toast";
+import type { VoteReceipt as VoteReceiptType } from "@/types";
 
 export interface VoteReceiptProps {
   receipt: VoteReceiptType;
@@ -20,20 +20,24 @@ function formatHash(hash: string): string {
 export function VoteReceipt({ receipt }: VoteReceiptProps) {
   const [copied, setCopied] = useState(false);
 
-  const formattedTime = format(
-    new Date(receipt.timestamp),
-    'yyyy년 M월 d일 a h시 mm분 ss초',
-    { locale: ko }
-  );
+  const formattedTime = (() => {
+    try {
+      const d = new Date(receipt.timestamp);
+      if (isNaN(d.getTime())) return "시간 정보 없음";
+      return format(d, "yyyy년 M월 d일 a h시 mm분 ss초", { locale: ko });
+    } catch {
+      return "시간 정보 없음";
+    }
+  })();
 
   const handleCopy = async () => {
     try {
       await navigator.clipboard.writeText(receipt.voteHash);
       setCopied(true);
-      toast.success('투표 해시가 복사되었어요!');
+      toast.success("투표 해시가 복사되었어요!");
       setTimeout(() => setCopied(false), 2000);
     } catch {
-      toast.error('복사에 실패했어요. 다시 시도해주세요.');
+      toast.error("복사에 실패했어요. 다시 시도해주세요.");
     }
   };
 
@@ -85,8 +89,8 @@ export function VoteReceipt({ receipt }: VoteReceiptProps) {
       {/* Explanation */}
       <div className="mt-4 rounded-lg bg-blue-50 px-3 py-2.5">
         <p className="text-xs leading-relaxed text-blue-700">
-          이 해시는 여러분의 투표가 올바르게 기록되었는지 확인할 수 있는
-          특별한 코드예요. 나중에 선생님이 투표 결과를 확인할 때 사용돼요.
+          이 해시는 여러분의 투표가 올바르게 기록되었는지 확인할 수 있는 특별한
+          코드예요. 나중에 선생님이 투표 결과를 확인할 때 사용돼요.
         </p>
       </div>
 

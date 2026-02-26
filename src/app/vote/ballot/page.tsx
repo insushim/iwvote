@@ -1,40 +1,42 @@
-'use client';
+"use client";
 
-import { useState, useEffect, useCallback, Suspense } from 'react';
-import { useRouter, useSearchParams } from 'next/navigation';
-import { motion } from 'framer-motion';
-import { ArrowLeft } from 'lucide-react';
-import toast from 'react-hot-toast';
-import { httpsCallable } from 'firebase/functions';
+import { useState, useEffect, useCallback, Suspense } from "react";
+import { useRouter, useSearchParams } from "next/navigation";
+import { motion } from "framer-motion";
+import { ArrowLeft } from "lucide-react";
+import toast from "react-hot-toast";
+import { httpsCallable } from "firebase/functions";
 
-import { doc, getDoc } from 'firebase/firestore';
-import { db, functions } from '@/lib/firebase';
-import { COLLECTIONS } from '@/constants';
-import { BallotPaper } from '@/components/vote/BallotPaper';
-import { VoteConfirm } from '@/components/vote/VoteConfirm';
-import { Spinner } from '@/components/ui/Spinner';
-import type { Election, VoteReceipt } from '@/types';
+import { doc, getDoc } from "firebase/firestore";
+import { db, functions } from "@/lib/firebase";
+import { COLLECTIONS } from "@/constants";
+import { BallotPaper } from "@/components/vote/BallotPaper";
+import { VoteConfirm } from "@/components/vote/VoteConfirm";
+import { Spinner } from "@/components/ui/Spinner";
+import type { Election, VoteReceipt } from "@/types";
 
-const ABSTENTION_ID = '__abstention__';
+const ABSTENTION_ID = "__abstention__";
 
 function BallotContent() {
   const router = useRouter();
   const searchParams = useSearchParams();
-  const code = searchParams.get('code');
-  const electionId = searchParams.get('electionId');
+  const code = searchParams.get("code");
+  const electionId = searchParams.get("electionId");
 
   const [election, setElection] = useState<Election | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
 
   const [confirmOpen, setConfirmOpen] = useState(false);
-  const [selectedCandidateId, setSelectedCandidateId] = useState<string | null>(null);
+  const [selectedCandidateId, setSelectedCandidateId] = useState<string | null>(
+    null,
+  );
   const [submitting, setSubmitting] = useState(false);
 
   useEffect(() => {
     if (!code || !electionId) {
-      toast.error('잘못된 접근이에요. 투표 코드를 다시 입력해주세요.');
-      router.replace('/vote');
+      toast.error("잘못된 접근이에요. 투표 코드를 다시 입력해주세요.");
+      router.replace("/vote");
       return;
     }
 
@@ -44,26 +46,37 @@ function BallotContent() {
         const electionSnap = await getDoc(electionRef);
 
         if (!electionSnap.exists()) {
-          setError('선거 정보를 찾을 수 없어요.');
-          toast.error('선거 정보를 찾을 수 없어요.');
+          setError("선거 정보를 찾을 수 없어요.");
+          toast.error("선거 정보를 찾을 수 없어요.");
           return;
         }
 
+        const raw = electionSnap.data()!;
         const electionData = {
           id: electionSnap.id,
-          ...electionSnap.data(),
+          ...raw,
+          settings: {
+            allowAbstention: true,
+            showRealtimeCount: true,
+            requireConfirmation: true,
+            maxVotesPerVoter: 1,
+            shuffleCandidates: false,
+            showCandidatePhoto: true,
+            ...(raw.settings ?? {}),
+          },
+          candidates: raw.candidates ?? [],
         } as Election;
 
-        if (electionData.status !== 'active') {
-          setError('현재 투표가 진행 중이지 않아요.');
-          toast.error('현재 투표가 진행 중이지 않아요.');
+        if (electionData.status !== "active") {
+          setError("현재 투표가 진행 중이지 않아요.");
+          toast.error("현재 투표가 진행 중이지 않아요.");
           return;
         }
 
         setElection(electionData);
       } catch {
-        setError('선거 정보를 불러오는 데 실패했어요.');
-        toast.error('선거 정보를 불러오는 데 실패했어요.');
+        setError("선거 정보를 불러오는 데 실패했어요.");
+        toast.error("선거 정보를 불러오는 데 실패했어요.");
       } finally {
         setLoading(false);
       }
@@ -87,7 +100,7 @@ function BallotContent() {
       const castVoteFn = httpsCallable<
         { code: string; electionId: string; candidateId: string },
         VoteReceipt
-      >(functions, 'castVote');
+      >(functions, "castVote");
 
       const result = await castVoteFn({
         code,
@@ -96,13 +109,13 @@ function BallotContent() {
       });
 
       const receipt = result.data;
-      toast.success('투표가 완료되었어요!');
+      toast.success("투표가 완료되었어요!");
 
       const receiptParam = encodeURIComponent(JSON.stringify(receipt));
       router.push(`/vote/complete?receipt=${receiptParam}`);
     } catch (err) {
       const message =
-        err instanceof Error ? err.message : '투표 처리 중 오류가 발생했어요.';
+        err instanceof Error ? err.message : "투표 처리 중 오류가 발생했어요.";
       toast.error(message);
       setSubmitting(false);
       setConfirmOpen(false);
@@ -133,7 +146,7 @@ function BallotContent() {
             &#x26A0;&#xFE0F;
           </div>
           <h2 className="text-xl font-bold text-gray-900">
-            {error || '선거 정보를 불러올 수 없어요'}
+            {error || "선거 정보를 불러올 수 없어요"}
           </h2>
           <p className="mt-2 text-sm text-gray-500">
             투표 코드를 다시 입력해주세요
@@ -186,8 +199,8 @@ function BallotContent() {
         onConfirm={handleConfirm}
         candidateName={
           selectedCandidateId === ABSTENTION_ID
-            ? '기권'
-            : selectedCandidate?.name || ''
+            ? "기권"
+            : selectedCandidate?.name || ""
         }
         candidateNumber={selectedCandidate?.number || 0}
         isAbstention={selectedCandidateId === ABSTENTION_ID}
