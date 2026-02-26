@@ -14,6 +14,47 @@ const svgBuffer = readFileSync(join(iconsDir, 'icon.svg'));
 
 const sizes = [16, 32, 48, 72, 96, 128, 144, 152, 167, 180, 192, 256, 384, 512];
 
+// Create ICO file from PNG buffers
+function createIco(pngBuffers) {
+  const numImages = pngBuffers.length;
+  const headerSize = 6;
+  const dirEntrySize = 16;
+  const dirSize = dirEntrySize * numImages;
+  let dataOffset = headerSize + dirSize;
+
+  const entries = pngBuffers.map((png) => {
+    // Read PNG dimensions from IHDR chunk
+    const width = png.readUInt32BE(16);
+    const height = png.readUInt32BE(20);
+    const entry = { png, width, height, offset: dataOffset, size: png.length };
+    dataOffset += png.length;
+    return entry;
+  });
+
+  const totalSize = headerSize + dirSize + pngBuffers.reduce((s, b) => s + b.length, 0);
+  const buf = Buffer.alloc(totalSize);
+
+  // ICO header: reserved(2) + type(2) + count(2)
+  buf.writeUInt16LE(0, 0);         // reserved
+  buf.writeUInt16LE(1, 2);         // type: 1 = ICO
+  buf.writeUInt16LE(numImages, 4); // count
+
+  entries.forEach((e, i) => {
+    const off = headerSize + i * dirEntrySize;
+    buf.writeUInt8(e.width >= 256 ? 0 : e.width, off);      // width (0 = 256)
+    buf.writeUInt8(e.height >= 256 ? 0 : e.height, off + 1); // height
+    buf.writeUInt8(0, off + 2);                               // palette
+    buf.writeUInt8(0, off + 3);                               // reserved
+    buf.writeUInt16LE(1, off + 4);                            // color planes
+    buf.writeUInt16LE(32, off + 6);                           // bits per pixel
+    buf.writeUInt32LE(e.size, off + 8);                       // size of PNG data
+    buf.writeUInt32LE(e.offset, off + 12);                    // offset to PNG data
+    e.png.copy(buf, e.offset);
+  });
+
+  return buf;
+}
+
 async function generate() {
   // Generate PNGs for each size
   for (const size of sizes) {
@@ -24,12 +65,14 @@ async function generate() {
     console.log(`Generated icon-${size}x${size}.png`);
   }
 
-  // Generate favicon.ico (32x32 PNG as ico)
-  await sharp(svgBuffer)
-    .resize(32, 32)
-    .png()
-    .toFile(join(publicDir, 'favicon.ico'));
-  console.log('Generated favicon.ico');
+  // Generate favicon.ico (proper ICO format with 16x16 and 32x32)
+  const ico16 = await sharp(svgBuffer).resize(16, 16).png().toBuffer();
+  const ico32 = await sharp(svgBuffer).resize(32, 32).png().toBuffer();
+  const ico48 = await sharp(svgBuffer).resize(48, 48).png().toBuffer();
+  const icoBuffer = createIco([ico16, ico32, ico48]);
+  const { writeFileSync } = await import('fs');
+  writeFileSync(join(publicDir, 'favicon.ico'), icoBuffer);
+  console.log('Generated favicon.ico (proper ICO format)');
 
   // Generate apple-touch-icon (180x180)
   await sharp(svgBuffer)
