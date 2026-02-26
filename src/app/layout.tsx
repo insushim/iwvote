@@ -2,7 +2,10 @@ import type { Metadata, Viewport } from "next";
 import { Toaster } from "react-hot-toast";
 import "./globals.css";
 
+const SITE_URL = "https://english-class-e059f.web.app";
+
 export const metadata: Metadata = {
+  metadataBase: new URL(SITE_URL),
   title: "우리한표 - 초등학교 전자투표",
   description:
     "우리한표는 초등학교 학생회장 선거를 위한 안전하고 투명한 전자투표 시스템입니다. 해시 체인 기술로 투표의 무결성을 보장합니다.",
