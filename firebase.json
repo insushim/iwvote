@@ -34,7 +34,16 @@
         ]
       },
       {
-        "source": "**/*.@(js|css|svg|png|jpg|jpeg|gif|ico|woff|woff2)",
+        "source": "favicon.ico",
+        "headers": [
+          {
+            "key": "Cache-Control",
+            "value": "public, max-age=3600"
+          }
+        ]
+      },
+      {
+        "source": "**/*.@(js|css|svg|png|jpg|jpeg|gif|woff|woff2)",
         "headers": [
           {
             "key": "Cache-Control",
