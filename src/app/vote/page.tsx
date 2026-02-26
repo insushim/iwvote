@@ -1,20 +1,20 @@
-'use client';
+"use client";
 
-import { useState, useCallback, useEffect, useRef } from 'react';
-import { useRouter, useSearchParams } from 'next/navigation';
-import { motion, AnimatePresence } from 'framer-motion';
-import { ArrowLeft, KeyRound, QrCode, Keyboard } from 'lucide-react';
-import toast from 'react-hot-toast';
+import { useState, useCallback, useEffect, useRef } from "react";
+import { useRouter, useSearchParams } from "next/navigation";
+import { motion, AnimatePresence } from "framer-motion";
+import { ArrowLeft, KeyRound, QrCode, Keyboard } from "lucide-react";
+import toast from "react-hot-toast";
 
-import { Suspense } from 'react';
-import { httpsCallable } from 'firebase/functions';
-import { CodeInput } from '@/components/vote/CodeInput';
-import { Spinner } from '@/components/ui/Spinner';
-import { VOTE_CODE_LENGTH } from '@/constants';
-import { validateCodeFormat } from '@/lib/voteCode';
-import { functions } from '@/lib/firebase';
+import { Suspense } from "react";
+import { httpsCallable } from "firebase/functions";
+import { CodeInput } from "@/components/vote/CodeInput";
+import { Spinner } from "@/components/ui/Spinner";
+import { VOTE_CODE_LENGTH } from "@/constants";
+import { validateCodeFormat } from "@/lib/voteCode";
+import { functions } from "@/lib/firebase";
 
-type InputMode = 'code' | 'qr';
+type InputMode = "code" | "qr";
 
 function VoteCodePageContent() {
   const router = useRouter();
@@ -22,30 +22,36 @@ function VoteCodePageContent() {
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [success, setSuccess] = useState(false);
+  const processingRef = useRef(false);
   const [inputMode, setInputMode] = useState<InputMode>(() => {
     // Restore last used mode from localStorage
-    if (typeof window !== 'undefined') {
-      const saved = localStorage.getItem('vote-input-mode');
-      if (saved === 'qr' || saved === 'code') return saved;
+    if (typeof window !== "undefined") {
+      const saved = localStorage.getItem("vote-input-mode");
+      if (saved === "qr" || saved === "code") return saved;
     }
-    return 'code';
+    return "code";
   });
   const qrReaderRef = useRef<HTMLDivElement>(null);
   const scannerRef = useRef<unknown>(null);
 
   // Check for pre-filled code from QR scan URL or mode preference
-  const prefilledCode = searchParams.get('code');
-  const modeParam = searchParams.get('mode');
+  const prefilledCode = searchParams.get("code");
+  const modeParam = searchParams.get("mode");
 
   const validateAndNavigate = useCallback(
     async (code: string) => {
+      // Prevent duplicate calls (QR scanner fires every frame)
+      if (processingRef.current) return;
+      processingRef.current = true;
+
       const normalizedCode = code.toUpperCase().trim();
 
       if (!validateCodeFormat(normalizedCode)) {
-        const msg = '투표 코드 형식이 올바르지 않아요. 다시 확인해주세요.';
+        const msg = "투표 코드 형식이 올바르지 않아요. 다시 확인해주세요.";
         setError(msg);
         toast.error(msg);
         setLoading(false);
+        processingRef.current = false;
         return;
       }
 
@@ -53,26 +59,40 @@ function VoteCodePageContent() {
       setError(null);
 
       try {
-        const validateCodeFn = httpsCallable<{ code: string }, { valid: boolean; electionId: string }>(functions, 'validateCode');
+        // Stop QR scanner immediately to prevent further scans
+        if (scannerRef.current) {
+          const scanner = scannerRef.current as { stop: () => Promise<void> };
+          scanner.stop().catch(() => {});
+          scannerRef.current = null;
+        }
+
+        const validateCodeFn = httpsCallable<
+          { code: string },
+          { valid: boolean; electionId: string }
+        >(functions, "validateCode");
         const result = await validateCodeFn({ code: normalizedCode });
         const { electionId } = result.data;
 
         setSuccess(true);
-        toast.success('투표 코드가 확인되었어요!');
+        toast.success("투표 코드가 확인되었어요!");
 
         setTimeout(() => {
           router.push(
-            `/vote/ballot?code=${encodeURIComponent(normalizedCode)}&electionId=${encodeURIComponent(electionId)}`
+            `/vote/ballot?code=${encodeURIComponent(normalizedCode)}&electionId=${encodeURIComponent(electionId)}`,
           );
         }, 800);
       } catch (err) {
-        const msg = err instanceof Error ? err.message : '코드 확인 중 오류가 발생했어요. 잠시 후 다시 시도해주세요.';
+        const msg =
+          err instanceof Error
+            ? err.message
+            : "코드 확인 중 오류가 발생했어요. 잠시 후 다시 시도해주세요.";
         setError(msg);
         toast.error(msg);
         setLoading(false);
+        processingRef.current = false;
       }
     },
-    [router]
+    [router],
   );
 
   // Auto-validate if code is provided via URL (from QR scan)
@@ -84,7 +104,7 @@ function VoteCodePageContent() {
 
   // Apply mode from URL parameter
   useEffect(() => {
-    if (modeParam === 'qr' || modeParam === 'code') {
+    if (modeParam === "qr" || modeParam === "code") {
       setInputMode(modeParam);
     }
   }, [modeParam]);
@@ -94,32 +114,42 @@ function VoteCodePageContent() {
       if (code.length !== VOTE_CODE_LENGTH) return;
       await validateAndNavigate(code);
     },
-    [validateAndNavigate]
+    [validateAndNavigate],
   );
 
   // QR Scanner setup
   useEffect(() => {
-    if (inputMode !== 'qr' || !qrReaderRef.current) return;
+    if (inputMode !== "qr" || !qrReaderRef.current) return;
 
-    let html5QrCode: { stop: () => Promise<void>; start: (config: unknown, options: unknown, onSuccess: (text: string) => void, onError: () => void) => Promise<void> } | null = null;
+    let html5QrCode: {
+      stop: () => Promise<void>;
+      start: (
+        config: unknown,
+        options: unknown,
+        onSuccess: (text: string) => void,
+        onError: () => void,
+      ) => Promise<void>;
+    } | null = null;
     let mounted = true;
 
     const startScanner = async () => {
       try {
-        const { Html5Qrcode } = await import('html5-qrcode');
+        const { Html5Qrcode } = await import("html5-qrcode");
         if (!mounted) return;
 
-        html5QrCode = new Html5Qrcode('qr-reader') as unknown as typeof html5QrCode;
+        html5QrCode = new Html5Qrcode(
+          "qr-reader",
+        ) as unknown as typeof html5QrCode;
         scannerRef.current = html5QrCode;
 
         await html5QrCode!.start(
-          { facingMode: 'environment' },
+          { facingMode: "environment" },
           { fps: 10, qrbox: { width: 250, height: 250 } },
           (decodedText: string) => {
             // Check if scanned text is a URL with code param
             try {
               const url = new URL(decodedText);
-              const scannedCode = url.searchParams.get('code');
+              const scannedCode = url.searchParams.get("code");
               if (scannedCode) {
                 validateAndNavigate(scannedCode);
                 return;
@@ -129,19 +159,22 @@ function VoteCodePageContent() {
             }
 
             // Treat as raw vote code
-            if (decodedText.length === VOTE_CODE_LENGTH && validateCodeFormat(decodedText)) {
+            if (
+              decodedText.length === VOTE_CODE_LENGTH &&
+              validateCodeFormat(decodedText)
+            ) {
               validateAndNavigate(decodedText);
             }
           },
           () => {
             // QR scan error (no code found in frame) - ignore
-          }
+          },
         );
       } catch (err) {
-        console.error('QR Scanner error:', err);
+        console.error("QR Scanner error:", err);
         if (mounted) {
-          toast.error('카메라를 사용할 수 없어요. 코드를 직접 입력해주세요.');
-          setInputMode('code');
+          toast.error("카메라를 사용할 수 없어요. 코드를 직접 입력해주세요.");
+          setInputMode("code");
         }
       }
     };
@@ -170,7 +203,11 @@ function VoteCodePageContent() {
     setInputMode(mode);
     setError(null);
     // Save preference for next student
-    try { localStorage.setItem('vote-input-mode', mode); } catch { /* ignore */ }
+    try {
+      localStorage.setItem("vote-input-mode", mode);
+    } catch {
+      /* ignore */
+    }
   }, []);
 
   return (
@@ -198,10 +235,10 @@ function VoteCodePageContent() {
           <motion.div
             initial={{ scale: 0 }}
             animate={{ scale: 1 }}
-            transition={{ type: 'spring', stiffness: 200, delay: 0.1 }}
+            transition={{ type: "spring", stiffness: 200, delay: 0.1 }}
             className="mb-6 flex h-20 w-20 items-center justify-center rounded-2xl bg-blue-100"
           >
-            {inputMode === 'qr' ? (
+            {inputMode === "qr" ? (
               <QrCode className="h-10 w-10 text-blue-600" />
             ) : (
               <KeyRound className="h-10 w-10 text-blue-600" />
@@ -210,33 +247,35 @@ function VoteCodePageContent() {
 
           {/* Title */}
           <h1 className="mb-2 text-2xl font-bold text-gray-900">
-            {inputMode === 'qr' ? 'QR 코드를 스캔하세요' : '투표 코드를 입력하세요'}
+            {inputMode === "qr"
+              ? "QR 코드를 스캔하세요"
+              : "투표 코드를 입력하세요"}
           </h1>
           <p className="mb-6 text-center text-sm text-gray-500">
-            {inputMode === 'qr'
-              ? '선생님이 나눠주신 종이의 QR 코드를 카메라로 비추세요'
-              : '투표 코드는 선생님이 나눠주신 종이에 있어요'}
+            {inputMode === "qr"
+              ? "선생님이 나눠주신 종이의 QR 코드를 카메라로 비추세요"
+              : "투표 코드는 선생님이 나눠주신 종이에 있어요"}
           </p>
 
           {/* Mode Toggle */}
           <div className="mb-6 flex w-full max-w-xs overflow-hidden rounded-xl border border-gray-200 bg-gray-50">
             <button
-              onClick={() => switchMode('code')}
+              onClick={() => switchMode("code")}
               className={`flex flex-1 items-center justify-center gap-2 px-4 py-2.5 text-sm font-medium transition-colors ${
-                inputMode === 'code'
-                  ? 'bg-white text-blue-600 shadow-sm'
-                  : 'text-gray-500 hover:text-gray-700'
+                inputMode === "code"
+                  ? "bg-white text-blue-600 shadow-sm"
+                  : "text-gray-500 hover:text-gray-700"
               }`}
             >
               <Keyboard className="h-4 w-4" />
               코드 입력
             </button>
             <button
-              onClick={() => switchMode('qr')}
+              onClick={() => switchMode("qr")}
               className={`flex flex-1 items-center justify-center gap-2 px-4 py-2.5 text-sm font-medium transition-colors ${
-                inputMode === 'qr'
-                  ? 'bg-white text-blue-600 shadow-sm'
-                  : 'text-gray-500 hover:text-gray-700'
+                inputMode === "qr"
+                  ? "bg-white text-blue-600 shadow-sm"
+                  : "text-gray-500 hover:text-gray-700"
               }`}
             >
               <QrCode className="h-4 w-4" />
@@ -246,7 +285,7 @@ function VoteCodePageContent() {
 
           {/* Input Area */}
           <AnimatePresence mode="wait">
-            {inputMode === 'code' ? (
+            {inputMode === "code" ? (
               <motion.div
                 key="code-input"
                 initial={{ opacity: 0, x: -20 }}
@@ -279,7 +318,9 @@ function VoteCodePageContent() {
                   />
                 </div>
                 {error && (
-                  <p className="mt-3 text-center text-sm text-red-500">{error}</p>
+                  <p className="mt-3 text-center text-sm text-red-500">
+                    {error}
+                  </p>
                 )}
               </motion.div>
             )}
@@ -310,8 +351,8 @@ function VoteCodePageContent() {
               투표 코드를 모르겠다면?
             </h3>
             <p className="mt-1 text-sm text-blue-600">
-              선생님께 투표 코드가 적힌 종이를 받았는지 확인해보세요.
-              종이를 잃어버렸다면 선생님께 말씀해주세요.
+              선생님께 투표 코드가 적힌 종이를 받았는지 확인해보세요. 종이를
+              잃어버렸다면 선생님께 말씀해주세요.
             </p>
           </motion.div>
 
@@ -331,7 +372,13 @@ function VoteCodePageContent() {
 
 export default function VoteCodePage() {
   return (
-    <Suspense fallback={<div className="flex min-h-dvh items-center justify-center"><Spinner size="lg" /></div>}>
+    <Suspense
+      fallback={
+        <div className="flex min-h-dvh items-center justify-center">
+          <Spinner size="lg" />
+        </div>
+      }
+    >
       <VoteCodePageContent />
     </Suspense>
   );
