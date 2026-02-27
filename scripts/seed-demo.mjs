@@ -15,9 +15,22 @@ const CryptoJS = fnRequire('crypto-js');
 
 // ── Config ──
 import { readFileSync } from 'fs';
-const SERVICE_ACCOUNT = JSON.parse(readFileSync(join(__dirname, '..', 'english-class-e059f-firebase-adminsdk-fbsvc-c2246ab29e.json'), 'utf-8'));
-const HMAC_SECRET = 'wv2026hmacSecretForVoteCodeVerify';
-const ENCRYPTION_KEY = 'wv2026securevoteencryptionkey32b';
+
+// 서비스 계정 키: 환경변수 또는 프로젝트 루트의 키 파일
+const saPath = process.env.GOOGLE_APPLICATION_CREDENTIALS
+  || join(__dirname, '..', 'english-class-e059f-firebase-adminsdk-fbsvc-c2246ab29e.json');
+const SERVICE_ACCOUNT = JSON.parse(readFileSync(saPath, 'utf-8'));
+
+// 시크릿: Firebase Cloud Functions에 설정된 값과 동일해야 함
+// 실행 전 환경변수로 설정하세요:
+//   export VOTE_HMAC_SECRET=your_hmac_secret
+//   export VOTE_ENCRYPTION_KEY=your_encryption_key_32bytes
+const HMAC_SECRET = process.env.VOTE_HMAC_SECRET;
+const ENCRYPTION_KEY = process.env.VOTE_ENCRYPTION_KEY;
+if (!HMAC_SECRET || !ENCRYPTION_KEY) {
+  console.error('❌ 환경변수 VOTE_HMAC_SECRET, VOTE_ENCRYPTION_KEY를 설정해주세요.');
+  process.exit(1);
+}
 const VOTE_CODE_CHARSET = 'ABCDEFGHJKMNPQRSTUVWXYZ23456789';
 const VOTE_CODE_LENGTH = 6;
 
