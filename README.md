@@ -13,7 +13,16 @@
   <a href="https://english-class-e059f.web.app">라이브 데모</a>&nbsp;&nbsp;|&nbsp;&nbsp;
   <a href="#-주요-기능">기능 소개</a>&nbsp;&nbsp;|&nbsp;&nbsp;
   <a href="#-기술-스택">기술 스택</a>&nbsp;&nbsp;|&nbsp;&nbsp;
-  <a href="#-보안-아키텍처">보안</a>
+  <a href="#-보안-아키텍처">보안</a>&nbsp;&nbsp;|&nbsp;&nbsp;
+  <a href="#라이브-데모">데모 체험</a>
+</p>
+
+<p align="center">
+  <img src="https://img.shields.io/badge/license-MIT-blue.svg" alt="MIT License" />
+  <img src="https://img.shields.io/badge/Next.js-16-black" alt="Next.js 16" />
+  <img src="https://img.shields.io/badge/Firebase-v12-orange" alt="Firebase" />
+  <img src="https://img.shields.io/badge/TypeScript-5-blue" alt="TypeScript" />
+  <img src="https://img.shields.io/badge/코드-13%2C400%2B줄-green" alt="Lines of Code" />
 </p>
 
 ---
@@ -219,6 +228,26 @@ auditLogs (감사 로그) — 모든 행위 기록
 
 ---
 
+## 라이브 데모
+
+> **바로 체험해보세요!** [https://english-class-e059f.web.app](https://english-class-e059f.web.app)
+
+### 데모 계정 접속 방법
+
+1. [라이브 데모](https://english-class-e059f.web.app)에 접속
+2. **회원가입** → 가입 코드 `DEMO2026` 입력
+3. 관리자 대시보드에서 선거 관리, 결과 확인, 해시체인 검증 등 모든 기능 체험
+
+### 데모 데이터
+
+| 선거 | 상태 | 설명 |
+|------|------|------|
+| 전교 어린이 회장 선거 | 종료됨 | 263표 투표 완료. 결과 차트, 해시체인 검증, 감사 로그 확인 가능 |
+| 5학년 2반 반장 선거 | 진행중 | 18/29표 투표됨. 미사용 코드로 실제 투표 체험 가능 |
+| 6학년 3반 반장 선거 | 준비중 | 선거 설정, 후보 등록, 코드 생성 등 관리 기능 체험 |
+
+---
+
 ## 시작하기
 
 ### 사전 요구사항
@@ -288,7 +317,10 @@ iwvote/
 ├── firestore.indexes.json      # 14개 복합 인덱스
 ├── firebase.json               # Firebase 호스팅 설정
 ├── .github/workflows/          # CI/CD 파이프라인
-└── scripts/                    # 아이콘 생성 스크립트
+├── scripts/                    # 유틸리티 스크립트
+│   ├── seed-demo.mjs           #   데모 시드 데이터 생성
+│   └── generate-icons.mjs      #   앱 아이콘 생성
+└── LICENSE                     # MIT 라이선스
 ```
 
 ---
@@ -320,6 +352,12 @@ iwvote/
 - **개인정보보호법** - 선거 종료 후 투표 데이터 파기 기능
 - **아동 개인정보 보호** - 14세 미만 학생 투표 시 보호자 동의 절차
 - 개인정보처리방침 및 이용약관 페이지 포함
+
+---
+
+## 라이선스
+
+MIT License - 자유롭게 사용, 수정, 배포할 수 있습니다. 자세한 내용은 [LICENSE](LICENSE) 파일을 참조하세요.
 
 ---
 
