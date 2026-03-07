@@ -734,6 +734,29 @@ export const generateVoterCodes = functions.https.onCall(
       electionId,
     );
 
+    // Delete existing unused codes for same electionId + classId to prevent duplicates
+    const existingCodesSnap = await db
+      .collection(COLLECTIONS.VOTER_CODES)
+      .where("electionId", "==", electionId)
+      .where("classId", "==", classId)
+      .get();
+
+    if (!existingCodesSnap.empty) {
+      const hasUsedCodes = existingCodesSnap.docs.some(
+        (doc) => doc.data().used === true,
+      );
+      if (hasUsedCodes) {
+        throw new functions.https.HttpsError(
+          "failed-precondition",
+          "이미 사용된 투표 코드가 있어 재생성할 수 없습니다. 미사용 코드만 삭제 후 다시 시도해주세요.",
+        );
+      }
+      // Delete all existing unused codes for this class
+      const deleteBatch = db.batch();
+      existingCodesSnap.docs.forEach((doc) => deleteBatch.delete(doc.ref));
+      await deleteBatch.commit();
+    }
+
     // Generate codes server-side
     const crypto = await import("crypto");
     const codes: { code: string; studentNumber: number }[] = [];
@@ -989,3 +1012,101 @@ export const claimSuperAdmin = functions.https.onCall(async (data, context) => {
 
   return { success: true };
 });
+
+// ============================================================
+// Cloud Function: deleteVoterCodes
+// Deletes unused voter codes for an election (auth required)
+// Only unused codes can be deleted — used codes are protected.
+// ============================================================
+
+export const deleteVoterCodes = functions.https.onCall(
+  async (data, context) => {
+    if (!context.auth) {
+      throw new functions.https.HttpsError(
+        "unauthenticated",
+        "인증이 필요합니다.",
+      );
+    }
+
+    const { electionId, classId } = data;
+
+    if (!electionId || typeof electionId !== "string") {
+      throw new functions.https.HttpsError(
+        "invalid-argument",
+        "선거 ID가 필요합니다.",
+      );
+    }
+
+    // Verify admin + school ownership
+    const electionData = await verifyAdminForSchool(
+      context.auth.uid,
+      electionId,
+    );
+
+    // Build query — optionally filter by classId
+    let codesQuery: FirebaseFirestore.Query = db
+      .collection(COLLECTIONS.VOTER_CODES)
+      .where("electionId", "==", electionId);
+
+    if (classId && typeof classId === "string") {
+      codesQuery = codesQuery.where("classId", "==", classId);
+    }
+
+    const codesSnap = await codesQuery.get();
+
+    if (codesSnap.empty) {
+      return { deleted: 0, skipped: 0 };
+    }
+
+    let deleted = 0;
+    let skipped = 0;
+
+    // Delete in batches of 500 (Firestore limit)
+    const batchSize = 500;
+    let batch = db.batch();
+    let batchCount = 0;
+
+    for (const doc of codesSnap.docs) {
+      if (doc.data().used === true) {
+        skipped++;
+        continue;
+      }
+      batch.delete(doc.ref);
+      deleted++;
+      batchCount++;
+
+      if (batchCount >= batchSize) {
+        await batch.commit();
+        batch = db.batch();
+        batchCount = 0;
+      }
+    }
+
+    if (batchCount > 0) {
+      await batch.commit();
+    }
+
+    // Update totalVoters on election document
+    const remainingCodesSnap = await db
+      .collection(COLLECTIONS.VOTER_CODES)
+      .where("electionId", "==", electionId)
+      .count()
+      .get();
+    const totalVoters = remainingCodesSnap.data().count;
+    await db
+      .collection(COLLECTIONS.ELECTIONS)
+      .doc(electionId)
+      .update({ totalVoters });
+
+    const scope = classId ? `${classId} 반` : "전체";
+    await createAuditLog(
+      electionId,
+      "codes_deleted",
+      context.auth.uid,
+      `${scope} 미사용 투표 코드 ${deleted}개 삭제 (사용중 ${skipped}개 보존, 남은 유권자: ${totalVoters}명)`,
+      electionData.schoolId || "",
+    );
+
+    return { deleted, skipped, totalVoters };
+  },
+);

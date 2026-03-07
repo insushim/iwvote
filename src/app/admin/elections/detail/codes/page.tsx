@@ -1,9 +1,9 @@
-'use client';
+"use client";
 
-import { Suspense, useState, useEffect, useCallback, useMemo } from 'react';
-import { useSearchParams } from 'next/navigation';
-import { motion } from 'framer-motion';
-import toast from 'react-hot-toast';
+import { Suspense, useState, useEffect, useCallback, useMemo } from "react";
+import { useSearchParams } from "next/navigation";
+import { motion } from "framer-motion";
+import toast from "react-hot-toast";
 import {
   ArrowLeft,
   Download,
@@ -11,24 +11,30 @@ import {
   RefreshCw,
   Zap,
   FileSpreadsheet,
-} from 'lucide-react';
-import { Button } from '@/components/ui/Button';
-import { Card } from '@/components/ui/Card';
-import { Badge } from '@/components/ui/Badge';
-import { Spinner } from '@/components/ui/Spinner';
-import { Modal } from '@/components/ui/Modal';
-import { CodeGenerator } from '@/components/admin/CodeGenerator';
-import { CodePrintSheet } from '@/components/admin/CodePrintSheet';
-import { useSchoolElection } from '@/hooks/useSchoolElection';
-import { useAuthContext } from '@/context/AuthContext';
-import { getSchool } from '@/lib/firestore';
-import { classIdToLabel, formatDate } from '@/lib/utils';
-import type { VoterCode, School } from '@/types';
+  Trash2,
+} from "lucide-react";
+import { Button } from "@/components/ui/Button";
+import { Card } from "@/components/ui/Card";
+import { Badge } from "@/components/ui/Badge";
+import { Spinner } from "@/components/ui/Spinner";
+import { Modal } from "@/components/ui/Modal";
+import { CodeGenerator } from "@/components/admin/CodeGenerator";
+import { CodePrintSheet } from "@/components/admin/CodePrintSheet";
+import { useSchoolElection } from "@/hooks/useSchoolElection";
+import { useAuthContext } from "@/context/AuthContext";
+import { getSchool } from "@/lib/firestore";
+import { classIdToLabel, formatDate } from "@/lib/utils";
+import type { VoterCode, School } from "@/types";
 
 function CodesPageContent() {
   const searchParams = useSearchParams();
-  const electionId = searchParams.get('id') ?? '';
-  const { election, loading: electionLoading, error: electionError, authorized } = useSchoolElection(electionId);
+  const electionId = searchParams.get("id") ?? "";
+  const {
+    election,
+    loading: electionLoading,
+    error: electionError,
+    authorized,
+  } = useSchoolElection(electionId);
   const { user, schoolId } = useAuthContext();
 
   const [codes, setCodes] = useState<VoterCode[]>([]);
@@ -36,25 +42,32 @@ function CodesPageContent() {
   const [selectedClass, setSelectedClass] = useState<string | null>(null);
   const [showGenerator, setShowGenerator] = useState(false);
   const [school, setSchool] = useState<School | null>(null);
+  const [deleting, setDeleting] = useState(false);
+  const [showDeleteConfirm, setShowDeleteConfirm] = useState<string | null>(
+    null,
+  ); // null=hidden, 'all'=전체, classId=반별
 
   // Fetch school data for student counts and class info
   useEffect(() => {
     if (!user || !schoolId) return;
-    getSchool(schoolId).then(setSchool).catch(() => {});
+    getSchool(schoolId)
+      .then(setSchool)
+      .catch(() => {});
   }, [user, schoolId]);
 
   const fetchCodes = useCallback(async () => {
     setCodesLoading(true);
     try {
-      const { collection, query, where, getDocs, orderBy } = await import('firebase/firestore');
-      const { db } = await import('@/lib/firebase');
-      const { COLLECTIONS } = await import('@/constants');
+      const { collection, query, where, getDocs, orderBy } =
+        await import("firebase/firestore");
+      const { db } = await import("@/lib/firebase");
+      const { COLLECTIONS } = await import("@/constants");
 
       const q = query(
         collection(db, COLLECTIONS.VOTER_CODES),
-        where('electionId', '==', electionId),
-        orderBy('classId', 'asc'),
-        orderBy('studentNumber', 'asc')
+        where("electionId", "==", electionId),
+        orderBy("classId", "asc"),
+        orderBy("studentNumber", "asc"),
       );
 
       const snap = await getDocs(q);
@@ -65,8 +78,8 @@ function CodesPageContent() {
 
       setCodes(fetchedCodes);
     } catch (err) {
-      console.error('Failed to fetch codes:', err);
-      toast.error('투표 코드를 불러오는데 실패했습니다.');
+      console.error("Failed to fetch codes:", err);
+      toast.error("투표 코드를 불러오는데 실패했습니다.");
     } finally {
       setCodesLoading(false);
     }
@@ -97,8 +110,8 @@ function CodesPageContent() {
 
   const sortedClassIds = useMemo(() => {
     return Object.keys(codesByClass).sort((a, b) => {
-      const [aG, aC] = a.split('-').map(Number);
-      const [bG, bC] = b.split('-').map(Number);
+      const [aG, aC] = a.split("-").map(Number);
+      const [bG, bC] = b.split("-").map(Number);
       if (aG !== bG) return aG - bG;
       return aC - bC;
     });
@@ -154,11 +167,11 @@ function CodesPageContent() {
 
   const downloadCSV = useCallback(() => {
     if (codes.length === 0) {
-      toast.error('다운로드할 코드가 없습니다.');
+      toast.error("다운로드할 코드가 없습니다.");
       return;
     }
 
-    const header = '반,번호,투표코드,상태\n';
+    const header = "반,번호,투표코드,상태\n";
     const rows = codes
       .sort((a, b) => {
         if (a.classId !== b.classId) return a.classId.localeCompare(b.classId);
@@ -166,20 +179,20 @@ function CodesPageContent() {
       })
       .map(
         (c) =>
-          `${classIdToLabel(c.classId)},${c.studentNumber},${c.code},${c.used ? '사용됨' : '미사용'}`
+          `${classIdToLabel(c.classId)},${c.studentNumber},${c.code},${c.used ? "사용됨" : "미사용"}`,
       )
-      .join('\n');
+      .join("\n");
 
-    const csvContent = '\uFEFF' + header + rows; // BOM for Korean encoding
-    const blob = new Blob([csvContent], { type: 'text/csv;charset=utf-8;' });
+    const csvContent = "\uFEFF" + header + rows; // BOM for Korean encoding
+    const blob = new Blob([csvContent], { type: "text/csv;charset=utf-8;" });
     const url = URL.createObjectURL(blob);
-    const link = document.createElement('a');
+    const link = document.createElement("a");
     link.href = url;
     link.download = `투표코드_${election?.title ?? electionId}.csv`;
     link.click();
     URL.revokeObjectURL(url);
 
-    toast.success('CSV 파일이 다운로드되었습니다.');
+    toast.success("CSV 파일이 다운로드되었습니다.");
   }, [codes, election, electionId]);
 
   const handlePrintClass = (classId: string) => {
@@ -190,6 +203,42 @@ function CodesPageContent() {
   const handlePrintAll = () => {
     setSelectedClass(null);
     setTimeout(() => window.print(), 300);
+  };
+
+  // Delete unused codes
+  const handleDeleteCodes = async (targetClassId?: string) => {
+    setDeleting(true);
+    try {
+      const { httpsCallable } = await import("firebase/functions");
+      const { functions } = await import("@/lib/firebase");
+      const deleteCodesFn = httpsCallable<
+        { electionId: string; classId?: string },
+        { deleted: number; skipped: number; totalVoters: number }
+      >(functions, "deleteVoterCodes");
+
+      const result = await deleteCodesFn({
+        electionId,
+        ...(targetClassId && targetClassId !== "all"
+          ? { classId: targetClassId }
+          : {}),
+      });
+
+      const { deleted, skipped } = result.data;
+      if (skipped > 0) {
+        toast.success(
+          `미사용 코드 ${deleted}개 삭제 (사용된 코드 ${skipped}개 보존)`,
+        );
+      } else {
+        toast.success(`투표 코드 ${deleted}개 삭제 완료`);
+      }
+      await fetchCodes();
+    } catch (err) {
+      const message = err instanceof Error ? err.message : "알 수 없는 오류";
+      toast.error(`코드 삭제 실패: ${message}`);
+    } finally {
+      setDeleting(false);
+      setShowDeleteConfirm(null);
+    }
   };
 
   // Generate codes for all classes
@@ -210,7 +259,10 @@ function CodesPageContent() {
     return (
       <div className="flex flex-col items-center justify-center py-20">
         <p className="text-red-500">접근 권한이 없습니다.</p>
-        <a href="/admin/elections/" className="mt-4 text-sm text-blue-600 hover:underline">
+        <a
+          href="/admin/elections/"
+          className="mt-4 text-sm text-blue-600 hover:underline"
+        >
           선거 목록으로 돌아가기
         </a>
       </div>
@@ -220,8 +272,13 @@ function CodesPageContent() {
   if (electionError || !election) {
     return (
       <div className="flex flex-col items-center justify-center py-20">
-        <p className="text-red-500">{electionError || '선거를 찾을 수 없습니다.'}</p>
-        <a href="/admin/elections/" className="mt-4 text-sm text-blue-600 hover:underline">
+        <p className="text-red-500">
+          {electionError || "선거를 찾을 수 없습니다."}
+        </p>
+        <a
+          href="/admin/elections/"
+          className="mt-4 text-sm text-blue-600 hover:underline"
+        >
           선거 목록으로 돌아가기
         </a>
       </div>
@@ -275,6 +332,18 @@ function CodesPageContent() {
           >
             전체 코드 CSV 다운로드
           </Button>
+          {codes.length > 0 && (
+            <Button
+              variant="outline"
+              size="md"
+              iconLeft={<Trash2 className="h-4 w-4" />}
+              onClick={() => setShowDeleteConfirm("all")}
+              disabled={deleting}
+              className="text-red-600 border-red-200 hover:bg-red-50"
+            >
+              전체 코드 삭제
+            </Button>
+          )}
         </div>
       </div>
 
@@ -290,7 +359,9 @@ function CodesPageContent() {
         </Card>
         <Card padding="md" className="bg-gray-50">
           <p className="text-sm text-gray-600">미사용</p>
-          <p className="text-2xl font-bold text-gray-900">{totalCodes - usedCodes}개</p>
+          <p className="text-2xl font-bold text-gray-900">
+            {totalCodes - usedCodes}개
+          </p>
         </Card>
       </div>
 
@@ -329,28 +400,50 @@ function CodesPageContent() {
                         {classIdToLabel(classId)}
                       </h3>
                       <Badge
-                        variant={classUsed === classCodes.length ? 'success' : 'default'}
+                        variant={
+                          classUsed === classCodes.length
+                            ? "success"
+                            : "default"
+                        }
                         size="sm"
                       >
                         {classUsed}/{classCodes.length} 사용
                       </Badge>
                     </div>
-                    <Button
-                      variant="outline"
-                      size="sm"
-                      iconLeft={<Printer className="h-3.5 w-3.5" />}
-                      onClick={() => handlePrintClass(classId)}
-                    >
-                      반별 인쇄
-                    </Button>
+                    <div className="flex items-center gap-2">
+                      <Button
+                        variant="outline"
+                        size="sm"
+                        iconLeft={<Printer className="h-3.5 w-3.5" />}
+                        onClick={() => handlePrintClass(classId)}
+                      >
+                        반별 인쇄
+                      </Button>
+                      {classCodes.some((c) => !c.used) && (
+                        <Button
+                          variant="outline"
+                          size="sm"
+                          iconLeft={<Trash2 className="h-3.5 w-3.5" />}
+                          onClick={() => setShowDeleteConfirm(classId)}
+                          disabled={deleting}
+                          className="text-red-500 border-red-200 hover:bg-red-50"
+                        >
+                          삭제
+                        </Button>
+                      )}
+                    </div>
                   </div>
 
                   <div className="overflow-x-auto">
                     <table className="w-full text-sm">
                       <thead>
                         <tr className="bg-gray-50">
-                          <th className="px-4 py-2.5 text-left font-medium text-gray-600">반</th>
-                          <th className="px-4 py-2.5 text-left font-medium text-gray-600">번호</th>
+                          <th className="px-4 py-2.5 text-left font-medium text-gray-600">
+                            반
+                          </th>
+                          <th className="px-4 py-2.5 text-left font-medium text-gray-600">
+                            번호
+                          </th>
                           <th className="px-4 py-2.5 text-left font-medium text-gray-600">
                             투표코드
                           </th>
@@ -364,13 +457,15 @@ function CodesPageContent() {
                           <tr
                             key={code.id}
                             className={`border-t border-gray-100 ${
-                              idx % 2 === 0 ? 'bg-white' : 'bg-gray-50/30'
+                              idx % 2 === 0 ? "bg-white" : "bg-gray-50/30"
                             }`}
                           >
                             <td className="px-4 py-2 text-gray-700">
                               {classIdToLabel(code.classId)}
                             </td>
-                            <td className="px-4 py-2 text-gray-700">{code.studentNumber}번</td>
+                            <td className="px-4 py-2 text-gray-700">
+                              {code.studentNumber}번
+                            </td>
                             <td className="px-4 py-2">
                               <code className="rounded bg-gray-100 px-2 py-0.5 font-mono text-sm font-bold text-gray-900">
                                 {code.code}
@@ -414,12 +509,53 @@ function CodesPageContent() {
             await fetchCodes();
             // Update total voters count
             if (election) {
-              const totalCount = classConfigs.reduce((sum, c) => sum + c.count, 0);
-              const { updateElection } = await import('@/lib/firestore');
+              const totalCount = classConfigs.reduce(
+                (sum, c) => sum + c.count,
+                0,
+              );
+              const { updateElection } = await import("@/lib/firestore");
               await updateElection(electionId, { totalVoters: totalCount });
             }
           }}
         />
+      </Modal>
+
+      {/* Delete Confirmation Modal */}
+      <Modal
+        isOpen={showDeleteConfirm !== null}
+        onClose={() => setShowDeleteConfirm(null)}
+        title="투표 코드 삭제"
+        size="sm"
+      >
+        <div className="space-y-4">
+          <p className="text-sm text-gray-600">
+            {showDeleteConfirm === "all"
+              ? "전체 미사용 투표 코드를 삭제하시겠습니까?"
+              : `${classIdToLabel(showDeleteConfirm ?? "")} 미사용 투표 코드를 삭제하시겠습니까?`}
+          </p>
+          <p className="text-xs text-red-500">
+            이미 사용된 코드는 보존됩니다. 이 작업은 되돌릴 수 없습니다.
+          </p>
+          <div className="flex justify-end gap-2">
+            <Button
+              variant="outline"
+              size="sm"
+              onClick={() => setShowDeleteConfirm(null)}
+              disabled={deleting}
+            >
+              취소
+            </Button>
+            <Button
+              variant="primary"
+              size="sm"
+              onClick={() => handleDeleteCodes(showDeleteConfirm ?? undefined)}
+              loading={deleting}
+              className="bg-red-600 hover:bg-red-700"
+            >
+              삭제
+            </Button>
+          </div>
+        </div>
       </Modal>
 
       {/* Print sheets (hidden on screen, shown on print) */}
@@ -434,7 +570,13 @@ function CodesPageContent() {
 
 export default function Page() {
   return (
-    <Suspense fallback={<div className="flex items-center justify-center py-20"><Spinner size="lg" label="로딩 중..." /></div>}>
+    <Suspense
+      fallback={
+        <div className="flex items-center justify-center py-20">
+          <Spinner size="lg" label="로딩 중..." />
+        </div>
+      }
+    >
       <CodesPageContent />
     </Suspense>
   );
